@@ -6,16 +6,24 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Search, Filter, Heart, TrendingUp, Clock } from 'lucide-react'
-import { useState } from 'react'
+import { CampaignFilters, CampaignFilters as CampaignFiltersType } from '@/components/features/campaigns/campaign-filters'
+import { Search, Heart, TrendingUp, Clock } from 'lucide-react'
+import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { formatAmount } from '@/lib/utils'
 
 export default function CampaignsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
+  const [filters, setFilters] = useState<CampaignFiltersType>({
+    sortBy: 'newest',
+    minProgress: 0,
+    maxProgress: 100,
+    endDate: 'all',
+    selectedNGOs: [],
+  })
 
-  const campaigns = [
+  const campaigns = useMemo(() => [
     {
       id: '1',
       title: 'Emergency Relief for Flood Victims',
@@ -88,16 +96,50 @@ export default function CampaignsPage() {
       endDate: '2026-07-30',
       imageUrl: '/api/placeholder/400/200',
     },
-  ]
+  ], [])
 
   const categories = ['all', 'emergency', 'healthcare', 'education', 'food', 'shelter', 'other']
+  const availableNGOs = Array.from(new Set(campaigns.map((c) => c.ngoName)))
 
-  const filteredCampaigns = campaigns.filter(
-    (campaign) =>
-      (selectedCategory === 'all' || campaign.category === selectedCategory) &&
-      (campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        campaign.description.toLowerCase().includes(searchQuery.toLowerCase()))
-  )
+  const filteredCampaigns = useMemo(() => {
+    let result = campaigns.filter(
+      (campaign) =>
+        (selectedCategory === 'all' || campaign.category === selectedCategory) &&
+        (campaign.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          campaign.description.toLowerCase().includes(searchQuery.toLowerCase()))
+    )
+
+    // Apply NGO filter
+    if (filters.selectedNGOs.length > 0) {
+      result = result.filter((campaign) => filters.selectedNGOs.includes(campaign.ngoName))
+    }
+
+    // Apply progress filter
+    const progress = (campaign: any) => (campaign.raisedAmount / campaign.targetAmount) * 100
+    result = result.filter(
+      (campaign) => progress(campaign) >= filters.minProgress && progress(campaign) <= filters.maxProgress
+    )
+
+    // Apply sorting
+    result = [...result].sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'newest':
+          return new Date(b.endDate).getTime() - new Date(a.endDate).getTime()
+        case 'oldest':
+          return new Date(a.endDate).getTime() - new Date(b.endDate).getTime()
+        case 'mostFunded':
+          return b.raisedAmount - a.raisedAmount
+        case 'leastFunded':
+          return a.raisedAmount - b.raisedAmount
+        case 'endingSoon':
+          return new Date(a.endDate).getTime() - new Date(b.endDate).getTime()
+        default:
+          return 0
+      }
+    })
+
+    return result
+  }, [campaigns, selectedCategory, searchQuery, filters])
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,10 +165,11 @@ export default function CampaignsPage() {
             />
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              <Filter className="mr-2 h-4 w-4" />
-              Filters
-            </Button>
+            <CampaignFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              availableNGOs={availableNGOs}
+            />
             <Link href="/campaigns/create">
               <Button size="sm">
                 Create Campaign
