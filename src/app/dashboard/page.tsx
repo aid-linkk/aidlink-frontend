@@ -13,6 +13,7 @@ import { ImpactChart } from '@/components/features/analytics/impact-chart'
 import { CampaignCardSkeleton, StatsCardSkeleton, TableRowSkeleton } from '@/components/features/loading/skeleton-card'
 import { ImpactBadges, getDefaultBadges } from '@/components/features/gamification/impact-badges'
 import { useRealTimeTransactions } from '@/hooks/use-real-time-transactions'
+import { ExportButton } from '@/components/features/export/export-button'
 import { 
   Heart, 
   TrendingUp, 
@@ -288,9 +289,12 @@ export default function DashboardPage() {
           <TabsContent value="transactions" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Recent Transactions</h2>
-              <Button variant="outline" size="sm">
-                View All <ArrowUpRight className="ml-2 h-4 w-4" />
-              </Button>
+              <div className="flex gap-2">
+                <ExportButton transactions={transactions} filename="aidlink-transactions" />
+                <Button variant="outline" size="sm">
+                  View All <ArrowUpRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <Card>
