@@ -10,6 +10,7 @@ import { useWalletStore } from '@/store/wallet-store'
 import { formatAddress, formatAmount } from '@/lib/utils'
 import { DonationChart } from '@/components/features/analytics/donation-chart'
 import { ImpactChart } from '@/components/features/analytics/impact-chart'
+import { CampaignCardSkeleton, StatsCardSkeleton, TableRowSkeleton } from '@/components/features/loading/skeleton-card'
 import { 
   Heart, 
   TrendingUp, 
@@ -22,9 +23,17 @@ import {
   Eye
 } from 'lucide-react'
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
 
 export default function DashboardPage() {
   const { address, balance, isConnected } = useWalletStore()
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    // Simulate data loading
+    const timer = setTimeout(() => setIsLoading(false), 1500)
+    return () => clearTimeout(timer)
+  }, [])
 
   if (!isConnected) {
     return (
@@ -133,20 +142,29 @@ export default function DashboardPage() {
 
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          {stats.map((stat, index) => (
-            <Card key={stat.label}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
-                <stat.icon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">
-                  <span className="text-green-600">{stat.change}</span> from last month
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+          {isLoading ? (
+            <>
+              <StatsCardSkeleton />
+              <StatsCardSkeleton />
+              <StatsCardSkeleton />
+              <StatsCardSkeleton />
+            </>
+          ) : (
+            stats.map((stat, index) => (
+              <Card key={stat.label}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
+                  <stat.icon className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stat.value}</div>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-green-600">{stat.change}</span> from last month
+                  </p>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </div>
 
         <Tabs defaultValue="campaigns" className="space-y-4">
@@ -167,42 +185,50 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {mockCampaigns.map((campaign) => (
-                <Card key={campaign.id} className="hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-lg">{campaign.title}</CardTitle>
-                      <Badge variant="secondary">{campaign.category}</Badge>
-                    </div>
-                    <CardDescription>
-                      {formatAmount(campaign.raisedAmount)} of {formatAmount(campaign.targetAmount)} XLM raised
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
-                        <div
-                          className="bg-primary h-full transition-all"
-                          style={{
-                            width: `${(campaign.raisedAmount / campaign.targetAmount) * 100}%`,
-                          }}
-                        />
+              {isLoading ? (
+                <>
+                  <CampaignCardSkeleton />
+                  <CampaignCardSkeleton />
+                  <CampaignCardSkeleton />
+                </>
+              ) : (
+                mockCampaigns.map((campaign) => (
+                  <Card key={campaign.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <CardTitle className="text-lg">{campaign.title}</CardTitle>
+                        <Badge variant="secondary">{campaign.category}</Badge>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">
-                          {Math.round((campaign.raisedAmount / campaign.targetAmount) * 100)}% funded
-                        </span>
-                        <Link href={`/campaigns/${campaign.id}`}>
-                          <Button size="sm" variant="outline">
-                            <Eye className="mr-2 h-4 w-4" />
-                            Details
-                          </Button>
-                        </Link>
+                      <CardDescription>
+                        {formatAmount(campaign.raisedAmount)} of {formatAmount(campaign.targetAmount)} XLM raised
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
+                          <div
+                            className="bg-primary h-full transition-all"
+                            style={{
+                              width: `${(campaign.raisedAmount / campaign.targetAmount) * 100}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">
+                            {Math.round((campaign.raisedAmount / campaign.targetAmount) * 100)}% funded
+                          </span>
+                          <Link href={`/campaigns/${campaign.id}`}>
+                            <Button size="sm" variant="outline">
+                              <Eye className="mr-2 h-4 w-4" />
+                              Details
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
 
             <Card className="bg-primary/5 border-primary/20">
@@ -245,21 +271,25 @@ export default function DashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mockTransactions.map((tx) => (
-                    <TableRow key={tx.id}>
-                      <TableCell className="capitalize">{tx.type}</TableCell>
-                      <TableCell>{tx.to}</TableCell>
-                      <TableCell>{formatAmount(tx.amount)} XLM</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-green-600 border-green-600">
-                          {tx.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(tx.timestamp).toLocaleDateString()}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {isLoading ? (
+                    <TableRowSkeleton />
+                  ) : (
+                    mockTransactions.map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell className="capitalize">{tx.type}</TableCell>
+                        <TableCell>{tx.to}</TableCell>
+                        <TableCell>{formatAmount(tx.amount)} XLM</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-green-600 border-green-600">
+                            {tx.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(tx.timestamp).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </Card>
