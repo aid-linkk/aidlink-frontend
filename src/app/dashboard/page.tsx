@@ -8,6 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useWalletStore } from '@/store/wallet-store'
 import { formatAddress, formatAmount } from '@/lib/utils'
+import { DonationChart } from '@/components/features/analytics/donation-chart'
+import { ImpactChart } from '@/components/features/analytics/impact-chart'
 import { 
   Heart, 
   TrendingUp, 
@@ -91,6 +93,23 @@ export default function DashboardPage() {
       status: 'completed',
       timestamp: new Date(Date.now() - 172800000).toISOString(),
     },
+  ]
+
+  const donationData = [
+    { month: 'Jan', amount: 200 },
+    { month: 'Feb', amount: 350 },
+    { month: 'Mar', amount: 450 },
+    { month: 'Apr', amount: 300 },
+    { month: 'May', amount: 500 },
+    { month: 'Jun', amount: 750 },
+  ]
+
+  const impactData = [
+    { category: 'Emergency', amount: 500 },
+    { category: 'Healthcare', amount: 250 },
+    { category: 'Education', amount: 150 },
+    { category: 'Food', amount: 300 },
+    { category: 'Shelter', amount: 200 },
   ]
 
   const stats = [
@@ -249,35 +268,8 @@ export default function DashboardPage() {
           <TabsContent value="analytics" className="space-y-4">
             <h2 className="text-xl font-semibold">Your Impact Analytics</h2>
             <div className="grid gap-4 md:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Donation History</CardTitle>
-                  <CardDescription>Your donations over time</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-48 flex items-center justify-center text-muted-foreground">
-                    <div className="text-center">
-                      <TrendingUp className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>Analytics chart will be displayed here</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Impact Distribution</CardTitle>
-                  <CardDescription>How your donations helped</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-48 flex items-center justify-center text-muted-foreground">
-                    <div className="text-center">
-                      <Heart className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                      <p>Impact breakdown will be displayed here</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <DonationChart data={donationData} />
+              <ImpactChart data={impactData} />
             </div>
           </TabsContent>
         </Tabs>
