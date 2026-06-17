@@ -1,5 +1,3 @@
-import { NextResponse } from 'next/server';
-
 jest.mock('next/server', () => ({
   NextResponse: {
     json: jest.fn((body: unknown, init?: { status?: number }) => ({
