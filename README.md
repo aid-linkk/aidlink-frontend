@@ -82,21 +82,41 @@ npm run dev
 
 ### Environment Variables
 
-Create a `.env.local` file in the root directory:
+All client-side environment variables must be prefixed with `NEXT_PUBLIC_`. After changing any of them, restart the dev server.
 
-```env
-NEXT_PUBLIC_STELLAR_NETWORK=testnet
-NEXT_PUBLIC_AID_TOKEN_CONTRACT=your_contract_id
-NEXT_PUBLIC_CAMPAIGN_MANAGER_CONTRACT=your_contract_id
-NEXT_PUBLIC_BENEFICIARY_REGISTRY_CONTRACT=your_contract_id
+Copy the example file and fill in your values:
+
+```bash
+cp .env.example .env.local
 ```
+
+| Variable | Description | Default |
+|---|---|---|
+| `NEXT_PUBLIC_HORIZON_MAINNET` | Mainnet Horizon REST API URL | `https://horizon.stellar.org` |
+| `NEXT_PUBLIC_HORIZON_TESTNET` | Testnet Horizon REST API URL | `https://horizon-testnet.stellar.org` |
+| `NEXT_PUBLIC_HORIZON_FUTURENET` | Futurenet Horizon REST API URL | `https://horizon-futurenet.stellar.org` |
+| `NEXT_PUBLIC_HORIZON_STANDALONE` | Standalone Horizon REST API URL | `http://localhost:8000` |
+| `NEXT_PUBLIC_SOROBAN_RPC_MAINNET` | Mainnet Soroban RPC endpoint | `https://rpc.mainnet.stellar.org` |
+| `NEXT_PUBLIC_SOROBAN_RPC_TESTNET` | Testnet Soroban RPC endpoint | `https://soroban-testnet.stellar.org` |
+| `NEXT_PUBLIC_SOROBAN_RPC_FUTURENET` | Futurenet Soroban RPC endpoint | `https://rpc-futurenet.stellar.org` |
+| `NEXT_PUBLIC_SOROBAN_RPC_STANDALONE` | Standalone Soroban RPC endpoint | `http://localhost:8000/soroban/rpc` |
+| `NEXT_PUBLIC_DEFAULT_NETWORK` | Default network | `testnet` |
+| `NEXT_PUBLIC_SUPPORTED_NETWORKS` | Comma-separated list of networks | `testnet,futurenet` |
+| `NEXT_PUBLIC_AID_TOKEN_CONTRACT` | AID token contract ID | _(empty)_ |
+| `NEXT_PUBLIC_CAMPAIGN_MANAGER_CONTRACT` | Campaign manager contract ID | _(empty)_ |
+| `NEXT_PUBLIC_BENEFICIARY_REGISTRY_CONTRACT` | Beneficiary registry contract ID | _(empty)_ |
+| `NEXT_PUBLIC_API_URL` | Backend API base URL | `http://localhost:3000/api` |
+| `NEXT_PUBLIC_ENABLE_ANALYTICS` | Enable analytics tracking | `true` |
+| `NEXT_PUBLIC_ENABLE_ERROR_TRACKING` | Enable error tracking | `true` |
 
 ### Network Configuration
 
-The application supports multiple Stellar networks:
-- **Testnet**: Default for development
-- **Futurenet**: For testing new features
-- **Mainnet**: For production use
+The application supports multiple Stellar networks configured at runtime via environment variables:
+
+- **Testnet** (`testnet`): Default for development and testing
+- **Futurenet** (`futurenet`): For testing upcoming protocol features
+- **Mainnet** (`mainnet`): Production network
+- **Standalone** (`standalone`): Local development with Quickstart Docker image
 
 ## 📁 Project Structure
 

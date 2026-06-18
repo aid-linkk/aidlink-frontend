@@ -1,4 +1,5 @@
 import { SorobanRpc, xdr, TransactionBuilder, Networks, BASE_FEE, Keypair } from '@stellar/stellar-sdk'
+import { SOROBAN_NETWORKS } from '@/config/constants'
 
 export interface NetworkConfig {
   networkPassphrase: string
@@ -8,15 +9,15 @@ export interface NetworkConfig {
 export const NETWORKS: Record<string, NetworkConfig> = {
   testnet: {
     networkPassphrase: Networks.TESTNET,
-    rpcUrl: 'https://soroban-testnet.stellar.org',
+    rpcUrl: SOROBAN_NETWORKS.TESTNET.rpcUrl,
   },
   futurenet: {
     networkPassphrase: Networks.FUTURENET,
-    rpcUrl: 'https://rpc-futurenet.stellar.org',
+    rpcUrl: SOROBAN_NETWORKS.FUTURENET.rpcUrl,
   },
   standalone: {
     networkPassphrase: Networks.STANDALONE,
-    rpcUrl: 'http://localhost:8000/soroban/rpc',
+    rpcUrl: SOROBAN_NETWORKS.STANDALONE.rpcUrl,
   },
 }
 
