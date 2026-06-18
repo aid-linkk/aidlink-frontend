@@ -20,7 +20,7 @@ import {
   CheckCircle2
 } from 'lucide-react'
 import Link from 'next/link'
-import { formatAmount, formatDate } from '@/lib/utils'
+import { formatAmount, formatDate, calculateCampaignProgress, getCampaignFundingStatus } from '@/lib/utils'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -81,7 +81,8 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
     }
   }
 
-  const progress = (campaign.raisedAmount / campaign.targetAmount) * 100
+  const progress = calculateCampaignProgress(campaign.raisedAmount, campaign.targetAmount)
+  const fundingStatus = getCampaignFundingStatus(campaign.raisedAmount, campaign.targetAmount)
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,10 +128,8 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
                     />
                   </div>
                   <div className="flex justify-between text-sm mt-2">
-                    <span className="text-muted-foreground">{progress.toFixed(1)}% funded</span>
-                    <span className="text-muted-foreground">
-                      {formatAmount(campaign.targetAmount - campaign.raisedAmount)} XLM remaining
-                    </span>
+                    <span className="text-muted-foreground">{fundingStatus.label}</span>
+                    <span className="text-muted-foreground">{fundingStatus.description}</span>
                   </div>
                 </div>
 
