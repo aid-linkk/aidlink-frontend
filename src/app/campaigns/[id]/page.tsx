@@ -8,11 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { 
-  Heart, 
-  Calendar, 
-  MapPin, 
-  Users, 
+import {
+  Heart,
+  Calendar,
+  MapPin,
+  Users,
   TrendingUp,
   ArrowLeft,
   Share2,
@@ -23,6 +23,13 @@ import Link from 'next/link'
 import { formatAmount, formatDate } from '@/lib/utils'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { useEffect, useState } from 'react'
+
+import {
+  CampaignCardSkeleton,
+  StatsCardSkeleton,
+  TableRowSkeleton,
+} from '@/components/features/loading/skeleton-card'
 
 export default function CampaignDetailPage({ params }: { params: { id: string } }) {
   const [donationAmount, setDonationAmount] = useState('')
@@ -81,12 +88,76 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
     }
   }
 
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false)
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+
+        <main className="container py-8">
+          <div className="mb-6">
+            <CampaignCardSkeleton />
+          </div>
+
+          <div className="grid gap-8 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-6">
+              {/* Header */}
+              <CampaignCardSkeleton />
+
+              {/* Funding stats */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <StatsCardSkeleton />
+                <StatsCardSkeleton />
+                <StatsCardSkeleton />
+              </div>
+
+              {/* Progress section */}
+              <CampaignCardSkeleton />
+
+              {/* Campaign details */}
+              <CampaignCardSkeleton />
+
+              {/* Beneficiaries / Donations table */}
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="space-y-3">
+                    <TableRowSkeleton />
+                    <TableRowSkeleton />
+                    <TableRowSkeleton />
+                    <TableRowSkeleton />
+                    <TableRowSkeleton />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Sidebar */}
+            <div className="space-y-6">
+              <CampaignCardSkeleton />
+              <CampaignCardSkeleton />
+              <CampaignCardSkeleton />
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   const progress = (campaign.raisedAmount / campaign.targetAmount) * 100
 
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      
+
       <main className="container py-8">
         <Link href="/campaigns" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
           <ArrowLeft className="mr-2 h-4 w-4" />
