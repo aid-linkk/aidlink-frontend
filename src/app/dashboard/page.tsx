@@ -111,33 +111,6 @@ export default function DashboardPage() {
     },
   ]
 
-  const mockTransactions = [
-    {
-      id: '1',
-      type: 'donation',
-      to: 'Emergency Relief Campaign',
-      amount: 500,
-      status: 'completed',
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      id: '2',
-      type: 'donation',
-      to: 'Medical Supplies Campaign',
-      amount: 250,
-      status: 'completed',
-      timestamp: new Date(Date.now() - 86400000).toISOString(),
-    },
-    {
-      id: '3',
-      type: 'distribution',
-      to: 'Beneficiary #1234',
-      amount: 100,
-      status: 'completed',
-      timestamp: new Date(Date.now() - 172800000).toISOString(),
-    },
-  ]
-
   const donationData = [
     { month: 'Jan', amount: 200 },
     { month: 'Feb', amount: 350 },
