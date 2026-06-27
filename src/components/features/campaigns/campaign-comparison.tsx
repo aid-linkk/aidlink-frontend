@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { GitCompare, X, Check } from 'lucide-react'
-import { formatAmount } from '@/lib/utils'
+import { formatAmount, calculateCampaignProgress } from '@/lib/utils'
 
 export interface Campaign {
   id: string
@@ -36,7 +36,7 @@ export function CampaignComparison({ campaigns }: CampaignComparisonProps) {
     }
   }
 
-  const getProgress = (campaign: Campaign) => (campaign.raisedAmount / campaign.targetAmount) * 100
+  const getProgress = (campaign: Campaign) => calculateCampaignProgress(campaign.raisedAmount, campaign.targetAmount)
 
   const getDaysRemaining = (endDate: string) => {
     const end = new Date(endDate)

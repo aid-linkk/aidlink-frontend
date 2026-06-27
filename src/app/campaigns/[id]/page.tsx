@@ -86,7 +86,8 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
     }
   }
 
-  const progress = (campaign.raisedAmount / campaign.targetAmount) * 100
+  const progress = calculateCampaignProgress(campaign.raisedAmount, campaign.targetAmount)
+  const fundingStatus = getCampaignFundingStatus(campaign.raisedAmount, campaign.targetAmount)
 
   useEffect(() => {
     const timer = setTimeout(() => {

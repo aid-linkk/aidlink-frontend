@@ -12,7 +12,7 @@ import { CampaignComparison } from '@/components/features/campaigns/campaign-com
 import { Search, Heart, TrendingUp, Clock } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { formatAmount } from '@/lib/utils'
+import { formatAmount, calculateCampaignProgress } from '@/lib/utils'
 
 export default function CampaignsPage() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -117,9 +117,11 @@ export default function CampaignsPage() {
     }
 
     // Apply progress filter
-    const progress = (campaign: any) => (campaign.raisedAmount / campaign.targetAmount) * 100
     result = result.filter(
-      (campaign) => progress(campaign) >= filters.minProgress && progress(campaign) <= filters.maxProgress
+      (campaign) => {
+        const p = calculateCampaignProgress(campaign.raisedAmount, campaign.targetAmount)
+        return p >= filters.minProgress && p <= filters.maxProgress
+      }
     )
 
     // Apply sorting
@@ -221,7 +223,7 @@ export default function CampaignsPage() {
                       <div
                         className="bg-primary h-full transition-all"
                         style={{
-                          width: `${(campaign.raisedAmount / campaign.targetAmount) * 100}%`,
+                          width: `${calculateCampaignProgress(campaign.raisedAmount, campaign.targetAmount)}%`,
                         }}
                       />
                     </div>
