@@ -25,30 +25,50 @@ Before deploying, ensure you have:
 
 ## Environment Variables
 
-Create a `.env.local` file in the root directory:
+All `NEXT_PUBLIC_*` variables are inlined at build time and exposed to the client. Restart the application after changing any of them.
+
+Create a `.env.local` file in the root directory (or set them in your hosting dashboard):
 
 ```env
-# Stellar Network
-NEXT_PUBLIC_STELLAR_NETWORK=testnet
-NEXT_PUBLIC_STELLAR_RPC_URL=https://soroban-testnet.stellar.org
+# =============================================================================
+# Stellar Horizon URLs
+# =============================================================================
+NEXT_PUBLIC_HORIZON_MAINNET=https://horizon.stellar.org
+NEXT_PUBLIC_HORIZON_TESTNET=https://horizon-testnet.stellar.org
+NEXT_PUBLIC_HORIZON_FUTURENET=https://horizon-futurenet.stellar.org
+NEXT_PUBLIC_HORIZON_STANDALONE=http://localhost:8000
 
-# Contract Addresses
+# =============================================================================
+# Soroban RPC URLs
+# =============================================================================
+NEXT_PUBLIC_SOROBAN_RPC_MAINNET=https://rpc.mainnet.stellar.org
+NEXT_PUBLIC_SOROBAN_RPC_TESTNET=https://soroban-testnet.stellar.org
+NEXT_PUBLIC_SOROBAN_RPC_FUTURENET=https://rpc-futurenet.stellar.org
+NEXT_PUBLIC_SOROBAN_RPC_STANDALONE=http://localhost:8000/soroban/rpc
+
+# =============================================================================
+# Network Selection
+# =============================================================================
+NEXT_PUBLIC_DEFAULT_NETWORK=testnet
+NEXT_PUBLIC_SUPPORTED_NETWORKS=testnet,futurenet
+
+# =============================================================================
+# Soroban Contract IDs
+# =============================================================================
 NEXT_PUBLIC_AID_TOKEN_CONTRACT=your_contract_id
 NEXT_PUBLIC_CAMPAIGN_MANAGER_CONTRACT=your_contract_id
 NEXT_PUBLIC_BENEFICIARY_REGISTRY_CONTRACT=your_contract_id
 
-# API Configuration
+# =============================================================================
+# Backend API
+# =============================================================================
 NEXT_PUBLIC_API_URL=https://your-api-url.com/api
-NEXT_PUBLIC_WS_URL=wss://your-websocket-url.com
 
-# Analytics (Optional)
-NEXT_PUBLIC_GA_ID=your_google_analytics_id
-NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn
-
+# =============================================================================
 # Feature Flags
+# =============================================================================
 NEXT_PUBLIC_ENABLE_ANALYTICS=true
-NEXT_PUBLIC_ENABLE_NOTIFICATIONS=true
-NEXT_PUBLIC_ENABLE_GAMIFICATION=true
+NEXT_PUBLIC_ENABLE_ERROR_TRACKING=true
 ```
 
 ## Vercel Deployment
