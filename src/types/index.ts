@@ -23,11 +23,26 @@ export interface Campaign {
   beneficiaries: Beneficiary[]
 }
 
+export type VerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected'
+
+export interface ProofObject {
+  type: 'on-chain' | 'signed'
+  identifier?: string
+  transactionHash?: string
+  fileName?: string
+  submittedBy?: string
+}
+
 export interface Beneficiary {
   id: string
   name: string
   walletAddress: string
   status: 'verified' | 'pending' | 'suspended'
+  verificationStatus: VerificationStatus
+  verificationProof?: string | ProofObject
+  verificationReason?: string
+  verificationSubmittedAt?: string
+  verificationRejectedAt?: string
   campaignId: string
   allocatedAmount: number
   claimedAmount: number
