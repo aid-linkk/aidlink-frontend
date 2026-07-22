@@ -14,6 +14,7 @@ import { CampaignCardSkeleton, StatsCardSkeleton, TableRowSkeleton } from '@/com
 import { ImpactBadges, getDefaultBadges } from '@/components/features/gamification/impact-badges'
 import { useRealTimeTransactions } from '@/hooks/use-real-time-transactions'
 import { ExportButton } from '@/components/features/export/export-button'
+// ExportButton is now self-contained — no transactions prop needed
 import { 
   Heart, 
   TrendingUp, 
@@ -263,7 +264,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Recent Transactions</h2>
               <div className="flex gap-2">
-                <ExportButton transactions={transactions} filename="aidlink-transactions" />
+                <ExportButton filename="aidlink-transactions" />
                 <Button variant="outline" size="sm">
                   View All <ArrowUpRight className="ml-2 h-4 w-4" />
                 </Button>
