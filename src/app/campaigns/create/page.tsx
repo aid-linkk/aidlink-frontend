@@ -172,7 +172,12 @@ export default function CreateCampaignPage() {
       setStatus('confirming')
       setConfirmAttempt(1)
 
-      const result = await client.createCampaign(params, wallet.publicKey, signer)
+      const result = await client.createCampaign(
+        params,
+        wallet.publicKey,
+        signer,
+        (attempt) => setConfirmAttempt(attempt)
+      )
 
       setStatus('confirmed')
       toast.success('Campaign created successfully!', {
@@ -461,7 +466,7 @@ export default function CreateCampaignPage() {
 
       {/* Fee Confirmation Dialog */}
       <Dialog open={showFeeDialog} onOpenChange={setShowFeeDialog}>
-        <DialogContent initialFocus={cancelBtnRef}>
+        <DialogContent onOpenAutoFocus={(e) => { e.preventDefault(); cancelBtnRef.current?.focus(); }}>
           <DialogHeader>
             <DialogTitle>Confirm Campaign Creation</DialogTitle>
             <DialogDescription>

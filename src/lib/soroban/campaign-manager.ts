@@ -1,4 +1,4 @@
-import { xdr, Address, TransactionBuilder } from '@stellar/stellar-sdk'
+import { xdr, TransactionBuilder } from '@stellar/stellar-sdk'
 import { SorobanSDK } from './sdk'
 
 export interface CreateCampaignParams {
@@ -25,6 +25,9 @@ export class CampaignManagerClient {
   constructor(private sdk: SorobanSDK, private contractId: string) {}
 
   private encodeParams(params: CreateCampaignParams): xdr.ScVal[] {
+    // XLM amount encoding uses BigInt stroops to avoid IEEE 754 floating-point drift
+    // (e.g. multiplying floats directly like 1.1234567 * 10_000_000 can result in non-integer precision drift).
+    // Math.round ensures an exact integer stroop representation before BigInt conversion.
     const stroopsBigInt = BigInt(Math.round(params.targetAmountXlm * 10_000_000))
     const u128Parts = new xdr.Int128Parts({
       hi: xdr.Uint64.fromString('0'),
@@ -55,7 +58,8 @@ export class CampaignManagerClient {
   async createCampaign(
     params: CreateCampaignParams,
     sourcePublicKey: string,
-    signer: (xdrString: string) => Promise<string>
+    signer: (xdrString: string) => Promise<string>,
+    onProgress?: (attempt: number) => void
   ): Promise<CreateCampaignResult> {
     const args = this.encodeParams(params)
     const simulation = await this.sdk.simulateOnly(this.contractId, 'create_campaign', args, sourcePublicKey)
@@ -65,7 +69,9 @@ export class CampaignManagerClient {
       throw new Error('Failed to assemble transaction for campaign creation')
     }
 
-    const unsignedXdr = transaction.toXdr().toString('base64')
+    const unsignedXdr = typeof transaction.toXDR === 'function'
+      ? transaction.toXDR()
+      : (transaction as any).toXdr().toString('base64')
     const signedXdr = await signer(unsignedXdr)
     
     const signedTx = TransactionBuilder.fromXDR(signedXdr, this.sdk.getNetworkPassphrase()) as any
@@ -77,6 +83,9 @@ export class CampaignManagerClient {
     while (attempts < maxAttempts) {
       await new Promise((r) => setTimeout(r, 1000))
       attempts++
+      if (onProgress) {
+        onProgress(attempts)
+      }
       try {
         const txStatus = await this.sdk.getTransactionStatus(txHash)
         if (txStatus.status === 'SUCCESS') {
@@ -113,27 +122,37 @@ export class CampaignManagerClient {
   }
 
   public decodeScVal(scVal: xdr.ScVal): string {
-    switch (scVal.arm()) {
+    const typeName = typeof (scVal as any).arm === 'function' ? (scVal as any).arm() : scVal.switch().name
+    switch (typeName) {
       case 'u64':
+      case 'scvU64':
         return scVal.u64().toString()
       case 'u128':
+      case 'scvU128':
         return scVal.u128().lo().toString()
       case 'bytes':
+      case 'scvBytes':
         return scVal.bytes().toString('utf-8')
       case 'str':
+      case 'scvString':
         return scVal.str().toString()
       case 'sym':
+      case 'scvSymbol':
         return scVal.sym().toString()
       case 'i128':
+      case 'scvI128':
         return scVal.i128().lo().toString()
       case 'u32':
+      case 'scvU32':
         return scVal.u32().toString()
       case 'i32':
+      case 'scvI32':
         return scVal.i32().toString()
       case 'i64':
+      case 'scvI64':
         return scVal.i64().toString()
       default:
-        return String(scVal.value())
+        return String(typeof scVal.value === 'function' ? scVal.value() : scVal)
     }
   }
 

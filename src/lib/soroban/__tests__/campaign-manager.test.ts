@@ -47,6 +47,7 @@ describe('CampaignManagerClient', () => {
 
   test('createCampaign returns campaignId decoded from scvU64 return value', async () => {
     const mockTx = {
+      toXDR: () => 'mockUnsignedXdr',
       toXdr: () => ({ toString: () => 'mockUnsignedXdr' }),
     }
 
@@ -76,7 +77,6 @@ describe('CampaignManagerClient', () => {
     const mockSigner = jest.fn().mockResolvedValue('mockSignedXdr')
 
     // Mock TransactionBuilder.fromXDR
-    const originalFromXDR = require('@stellar/stellar-sdk').TransactionBuilder.fromXDR
     jest.spyOn(require('@stellar/stellar-sdk').TransactionBuilder, 'fromXDR').mockReturnValue({} as any)
 
     const result = await client.createCampaign(
