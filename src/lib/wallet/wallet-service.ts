@@ -1,13 +1,18 @@
 import * as freighterApi from '@stellar/freighter-api'
-import { WalletKit } from '@stellar/wallet-sdk'
+import {
+  WalletAdapter,
+  FreighterAdapter,
+  WalletKitAdapter,
+  type StellarNetwork,
+  type WalletInfo,
+} from './adapters'
+import { NoActiveWalletError } from './errors'
 import { getSorobanSDK, type NetworkName } from '../soroban/sdk'
 import { useWalletStore } from '@/store/wallet-store'
 
-export interface WalletInfo {
-  publicKey: string
-  address: string
-  network: string
-}
+export type { WalletInfo, StellarNetwork }
+
+export type WalletId = 'freighter' | 'rabet' | 'xbull'
 
 /**
  * Freighter's own short network names, as returned by getNetwork()/
@@ -31,12 +36,47 @@ const FREIGHTER_TO_APP_NETWORK: Record<string, NetworkName> = {
 }
 
 export class WalletService {
-  private walletKit: WalletKit
+  private _activeAdapter: WalletAdapter | null = null
+  private _adapterCache: Map<string, WalletAdapter> = new Map()
+  private _networkChangeUnsubscribe: (() => void) | null = null
 
-  constructor() {
-    this.walletKit = new WalletKit({
-      network: 'testnet',
-    })
+  /**
+   * Connect to a wallet and set it as the active adapter.
+   */
+  async connect(walletId: WalletId, network: StellarNetwork): Promise<WalletInfo> {
+    const adapterKey = `${walletId}-${network}`
+
+    let adapter: WalletAdapter
+    if (this._adapterCache.has(adapterKey)) {
+      adapter = this._adapterCache.get(adapterKey)!
+    } else {
+      adapter = this._createAdapter(walletId, network)
+      this._adapterCache.set(adapterKey, adapter)
+    }
+
+    const walletInfo = await adapter.connect()
+    this._activeAdapter = adapter
+
+    if (walletId === 'freighter') {
+      await this._subscribeToFreighterNetworkChange()
+    }
+
+    return walletInfo
+  }
+
+  /**
+   * Convenience Freighter connect used by `useWalletEnhanced`.
+   * Sets Freighter as the active adapter so later `sign`/`disconnect` work.
+   */
+  async connectFreighter(): Promise<WalletInfo> {
+    try {
+      const freighterNetwork = await this.getNetwork()
+      const network = FREIGHTER_TO_APP_NETWORK[freighterNetwork] ?? 'testnet'
+      return await this.connect('freighter', network)
+    } catch (error) {
+      console.error('Error connecting Freighter:', error)
+      throw new Error('Failed to connect Freighter wallet')
+    }
   }
 
   async isFreighterConnected(): Promise<boolean> {
@@ -48,51 +88,86 @@ export class WalletService {
       console.error('Error checking Freighter connection:', error)
       return false
     }
+  }
+
+  /**
+   * Sign via the active adapter registry.
+   */
+  async sign(xdr: string): Promise<string> {
+    if (!this._activeAdapter) {
+      throw new NoActiveWalletError('No wallet is connected. Call connect() first.')
+    }
 
     const currentNetwork = this.getCurrentNetwork()
     return await this._activeAdapter.sign(xdr, currentNetwork)
   }
 
-  async connectFreighter(): Promise<WalletInfo> {
+  /**
+   * Sign against the currently active network using Freighter directly.
+   * Kept for call sites / tests that rely on passphrase resolution from the
+   * Soroban SDK factory (issue #105).
+   */
+  async signTransaction(xdr: string, network?: NetworkName): Promise<string> {
     try {
-      const { address, error } = await freighterApi.getAddress()
-      if (error || !address) {
-        throw new Error(error ? String(error) : 'No address returned by Freighter')
-      }
+      const activeNetwork = network ?? useWalletStore.getState().network
+      const networkPassphrase = getSorobanSDK(activeNetwork).networkPassphrase
 
-      const freighterNetwork = await this.getNetwork()
-      const network = FREIGHTER_TO_APP_NETWORK[freighterNetwork] ?? 'testnet'
-
-      return {
-        publicKey: address,
-        address,
-        network,
+      const { signedTxXdr, error } = await freighterApi.signTransaction(xdr, {
+        networkPassphrase,
+      })
+      if (error) {
+        throw new Error(String(error))
       }
+      return signedTxXdr
     } catch (error) {
-      console.error('Error connecting Freighter:', error)
-      throw new Error('Failed to connect Freighter wallet')
+      console.error('Error signing transaction:', error)
+      throw new Error('Failed to sign transaction')
     }
   }
 
-  async connectWalletKit(): Promise<WalletInfo> {
-    try {
-      const { publicKey } = await this.walletKit.getAddress()
-      const address = publicKey
-
-      return {
-        publicKey,
-        address,
-        network: 'testnet',
-      }
+  async disconnect(): Promise<void> {
+    if (this._activeAdapter) {
+      await this._activeAdapter.disconnect()
+      this._activeAdapter = null
     }
-    // Server-side: WalletStore is not available. Throw so callers handle the case.
-    throw new Error('WalletStore is not available in this environment')
+
+    if (this._networkChangeUnsubscribe) {
+      this._networkChangeUnsubscribe()
+      this._networkChangeUnsubscribe = null
+    }
   }
 
   /**
-   * Get the active wallet ID
-   * @returns The wallet ID or null if no wallet is connected
+   * Returns Freighter's current short network name (e.g. 'TESTNET', 'PUBLIC').
    */
+  async getNetwork(): Promise<FreighterNetwork> {
+    try {
+      const { network, error } = await freighterApi.getNetwork()
+      if (error || !network) {
+        return 'TESTNET'
+      }
+      return network as FreighterNetwork
+    } catch (error) {
+      console.error('Error getting network:', error)
+      return 'TESTNET'
+    }
+  }
+
+  /**
+   * Get the current network from WalletStore (single source of truth).
+   */
+  getCurrentNetwork(): StellarNetwork {
+    if (typeof window !== 'undefined') {
+      try {
+        return useWalletStore.getState().network as StellarNetwork
+      } catch (error) {
+        console.warn('Failed to get network from WalletStore', error)
+        throw new Error('Unable to determine current network from WalletStore')
+      }
+    }
+    throw new Error('WalletStore is not available in this environment')
+  }
+
   getActiveWalletId(): WalletId | null {
     if (!this._activeAdapter) {
       return null
@@ -100,59 +175,48 @@ export class WalletService {
     return this._activeAdapter.walletId as WalletId
   }
 
-  /**
-   * Check if a wallet is currently connected
-   */
   isConnected(): boolean {
     return this._activeAdapter !== null
   }
 
-  /**
-   * Create an adapter instance for the given wallet ID and network
-   */
   private _createAdapter(walletId: WalletId, network: StellarNetwork): WalletAdapter {
     if (walletId === 'freighter') {
       return new FreighterAdapter()
-    } else if (walletId === 'rabet' || walletId === 'xbull') {
-      return new WalletKitAdapter(walletId, network)
-    } else {
-      throw new Error(`Unsupported wallet: ${walletId}`)
     }
+    if (walletId === 'rabet' || walletId === 'xbull') {
+      return new WalletKitAdapter(walletId, network)
+    }
+    throw new Error(`Unsupported wallet: ${walletId}`)
   }
 
-  /**
-   * Subscribe to Freighter's network change events (if available)
-   * and sync with WalletStore
-   */
   private async _subscribeToFreighterNetworkChange(): Promise<void> {
     try {
-      // Check if Freighter supports network change events
-      // The functional API may support event listeners via WatchWalletChanges
-      // This is a best-effort approach and may not be available in all versions
-      if (typeof (freighterApi as any).on === 'function') {
-        const handler = (network: string) => {
-          // Sync network change to WalletStore
-          if (typeof window !== 'undefined') {
-            try {
-              const { useWalletStore } = require('@/store/wallet-store')
-              useWalletStore.getState().switchNetwork(network as StellarNetwork)
-            } catch (error) {
-              console.error('Failed to sync network change to WalletStore', error)
-            }
-          }
+      const api = freighterApi as typeof freighterApi & {
+        on?: (event: string, handler: (network: string) => void) => void
+        off?: (event: string, handler: (network: string) => void) => void
+      }
+
+      if (typeof api.on !== 'function') {
+        return
+      }
+
+      const handler = (network: string) => {
+        if (typeof window === 'undefined') return
+        try {
+          useWalletStore.getState().switchNetwork(network as StellarNetwork)
+        } catch (error) {
+          console.error('Failed to sync network change to WalletStore', error)
         }
+      }
 
-        (freighterApi as any).on('networkChanged', handler)
+      api.on('networkChanged', handler)
 
-        // Store unsubscribe function
-        this._networkChangeUnsubscribe = () => {
-          if (typeof (freighterApi as any).off === 'function') {
-            (freighterApi as any).off('networkChanged', handler)
-          }
+      this._networkChangeUnsubscribe = () => {
+        if (typeof api.off === 'function') {
+          api.off('networkChanged', handler)
         }
       }
     } catch (error) {
-      // Network change subscription is optional; don't fail if unsupported
       console.warn('Freighter network change subscription not available', error)
     }
   }
