@@ -9,7 +9,7 @@ describe('CampaignDetailPage', () => {
   it('shows loading placeholders and then campaign content', () => {
     jest.useFakeTimers()
 
-    const { container } = render(<CampaignDetailPage params={{ id: 'campaign-1' }} />)
+    const { container } = render(<CampaignDetailPage params={Promise.resolve({ id: 'campaign-1' })} />)
 
     expect(container.querySelector('.animate-pulse')).toBeTruthy()
     expect(screen.queryByText('Emergency Relief for Flood Victims')).toBeNull()

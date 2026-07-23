@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { Navigation } from '@/components/layout/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -27,13 +28,14 @@ import { formatAmount, formatDate } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
-export default function CampaignDetailPage({ params }: { params: { id: string } }) {
+export default function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = React.use(params)
   const [isLoading, setIsLoading] = useState(true)
   const [donationAmount, setDonationAmount] = useState('')
   const [isDonating, setIsDonating] = useState(false)
 
   const campaign = {
-    id: params.id,
+    id: id,
     title: 'Emergency Relief for Flood Victims',
     description:
       'Providing immediate relief to families affected by severe flooding in the region. Funds will be used for food, shelter, and medical supplies. This campaign aims to support 500 families who have lost their homes and livelihoods due to the devastating floods.',
@@ -86,8 +88,7 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
     }
   }
 
-  const progress = calculateCampaignProgress(campaign.raisedAmount, campaign.targetAmount)
-  const fundingStatus = getCampaignFundingStatus(campaign.raisedAmount, campaign.targetAmount)
+  const progress = (campaign.raisedAmount / campaign.targetAmount) * 100
 
   useEffect(() => {
     const timer = setTimeout(() => {

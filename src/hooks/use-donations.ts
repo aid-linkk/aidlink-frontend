@@ -46,7 +46,7 @@ export function useDonations(campaignId?: string) {
     loadDonations();
   }, [loadDonations]);
 
-  const trackDonation = async (amount: number) => {
+  const trackDonation = async (_amount: number) => {
     setLoading(true);
     setError(null);
     try {

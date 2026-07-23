@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { useWalletStore } from '@/store/wallet-store'
-import { Home, Compass, BarChart3, User, Bell } from 'lucide-react'
+import { Home, Compass, BarChart3, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NotificationCenter } from '@/components/features/notification-center'
 

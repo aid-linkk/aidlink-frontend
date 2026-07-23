@@ -1,7 +1,7 @@
 'use client'
 
 import { Navigation } from '@/components/layout/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -14,7 +14,6 @@ import {
   Search, 
   TrendingUp,
   AlertCircle,
-  CheckCircle2,
   Clock,
   MoreHorizontal
 } from 'lucide-react'
@@ -84,7 +83,7 @@ export default function AdminPage() {
     { label: 'Flagged Users', value: '3', icon: AlertCircle, change: '-1' },
   ]
 
-  const handleVerify = async (beneficiaryId: string) => {
+  const handleVerify = async () => {
     try {
       await new Promise((resolve) => setTimeout(resolve, 1000))
       toast.success('Beneficiary verified successfully')
@@ -93,7 +92,7 @@ export default function AdminPage() {
     }
   }
 
-  const handleSuspend = async (userId: string) => {
+  const handleSuspend = async () => {
     try {
       await new Promise((resolve) => setTimeout(resolve, 1000))
       toast.success('User suspended successfully')
@@ -116,7 +115,7 @@ export default function AdminPage() {
 
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          {stats.map((stat, index) => (
+          {stats.map((stat) => (
             <Card key={stat.label}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
@@ -177,7 +176,7 @@ export default function AdminPage() {
                         <div className="flex gap-2">
                           <Button
                             size="sm"
-                            onClick={() => handleVerify(beneficiary.id)}
+                            onClick={() => handleVerify()}
                           >
                             <ShieldCheck className="mr-2 h-4 w-4" />
                             Verify
@@ -253,7 +252,7 @@ export default function AdminPage() {
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => handleSuspend(user.id)}
+                            onClick={() => handleSuspend()}
                           >
                             <Ban className="mr-2 h-4 w-4" />
                             Suspend
