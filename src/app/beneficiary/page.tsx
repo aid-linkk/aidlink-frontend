@@ -7,33 +7,34 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { QRCodeSVG } from 'qrcode.react'
-import { Wallet, QrCode, History, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
+import { Wallet, QrCode, History, CheckCircle2, Clock, AlertCircle, Loader2 } from 'lucide-react'
 import { useWalletStore } from '@/store/wallet-store'
 import { formatAddress, formatAmount, formatDate } from '@/lib/utils'
 import type { ProofSubmissionPayload } from '@/components/beneficiary/ProofSubmissionForm'
-import type { Beneficiary } from '@/types'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
+import { useBeneficiaryStatus } from '@/hooks/use-beneficiary-status'
+import { useSubmitProof } from '@/hooks/use-submit-proof'
+import { CONTRACT_IDS } from '@/config/constants'
 
 export default function BeneficiaryPage() {
   const { address, balance, isConnected } = useWalletStore()
   const [showQR, setShowQR] = useState(false)
-  const [beneficiary, setBeneficiary] = useState<Beneficiary>({
-    id: 'beneficiary-current',
-    name: 'Current Beneficiary',
-    walletAddress: address || '',
-    status: 'pending',
-    verificationStatus: 'unverified',
-    campaignId: 'campaign-current',
-    allocatedAmount: 750,
-    claimedAmount: 500,
-    location: {
-      country: 'Nigeria',
-      region: 'Lagos',
-      city: 'Lagos',
-    },
-    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-  })
+
+  // ------------------------------------------------------------------
+  // On-chain status — replaces hardcoded useState<Beneficiary> verificationStatus
+  // ------------------------------------------------------------------
+  const {
+    verificationStatus,
+    rejectionReason,
+    isLoading: statusLoading,
+    contractNotConfigured: statusContractMissing,
+  } = useBeneficiaryStatus(address)
+
+  // ------------------------------------------------------------------
+  // Proof submission hook
+  // ------------------------------------------------------------------
+  const { state: submitState, submit, reset: resetSubmit } = useSubmitProof()
 
   if (!isConnected) {
     return (
@@ -41,8 +42,33 @@ export default function BeneficiaryPage() {
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-2xl font-bold mb-2">Wallet Not Connected</h2>
-          <p className="text-muted-foreground mb-4">Please connect your wallet to access the beneficiary portal</p>
+          <p className="text-muted-foreground mb-4">
+            Please connect your wallet to access the beneficiary portal
+          </p>
         </div>
+      </div>
+    )
+  }
+
+  // Show a clear error if the contract is not deployed, rather than a generic failure
+  if (statusContractMissing) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navigation />
+        <main className="container py-8">
+          <div className="flex items-center justify-center py-24">
+            <div className="text-center max-w-md">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-xl font-bold mb-2">Contract Not Configured</h2>
+              <p className="text-muted-foreground text-sm">
+                The Beneficiary Registry contract address is not set.{' '}
+                {CONTRACT_IDS.BENEFICIARY_REGISTRY
+                  ? null
+                  : 'Set NEXT_PUBLIC_BENEFICIARY_REGISTRY_CONTRACT in your environment and restart.'}
+              </p>
+            </div>
+          </div>
+        </main>
       </div>
     )
   }
@@ -71,7 +97,7 @@ export default function BeneficiaryPage() {
 
   const handleClaim = async (_claimId: string) => {
     try {
-      // Simulate claim process
+      // Claim flow is out of scope per issue spec — placeholder
       await new Promise((resolve) => setTimeout(resolve, 2000))
       toast.success('Aid claimed successfully!', {
         description: 'Your claim has been processed on the blockchain',
@@ -83,33 +109,66 @@ export default function BeneficiaryPage() {
     }
   }
 
-  const handleSubmitProof = async ({ proof, submittedAt }: ProofSubmissionPayload) => {
-    await new Promise((resolve) => setTimeout(resolve, 1200))
-    setBeneficiary((currentBeneficiary) => ({
-      ...currentBeneficiary,
-      walletAddress: address || currentBeneficiary.walletAddress,
-      status: 'pending',
-      verificationStatus: 'pending',
-      verificationProof: proof,
-      verificationSubmittedAt: submittedAt,
-      verificationReason: undefined,
-      verificationRejectedAt: undefined,
-    }))
-    toast.success('Verification proof submitted', {
-      description: 'Your proof is now under review.',
-    })
-  }
+  /**
+   * handleSubmitProof — no setTimeout mock.
+   *
+   * Delegates entirely to useSubmitProof which:
+   *   1. Computes SHA-256 of the file (or validates the tx hash)
+   *   2. Calls BENEFICIARY_REGISTRY_CONTRACT submit_proof(address, proofCid)
+   *   3. Polls with exponential backoff until the transaction lands
+   *   4. Invalidates the beneficiary-status query so the banner updates
+   */
+  const handleSubmitProof = useCallback(
+    async (payload: ProofSubmissionPayload) => {
+      if (!address) return
 
-  const isVerified = beneficiary.verificationStatus === 'verified'
+      await submit(payload, address)
+
+      if (submitState.status === 'success' || submitState.txHash) {
+        toast.success('Verification proof submitted', {
+          description: 'Your proof is now under review. Status will update automatically.',
+        })
+      } else if (submitState.status === 'error' && submitState.error) {
+        toast.error('Proof submission failed', {
+          description: submitState.error,
+        })
+        // Re-throw so ProofSubmissionForm can display its own error state
+        throw new Error(submitState.error)
+      }
+
+      // Reset the submit hook state after a short delay so the next attempt starts fresh
+      setTimeout(() => resetSubmit(), 3000)
+    },
+    [address, submit, submitState, resetSubmit],
+  )
+
+  const isVerified = verificationStatus === 'verified'
+
+  // Build a minimal Beneficiary shape for VerificationWorkflow (only the fields it reads)
+  const beneficiaryForWorkflow = {
+    id: 'beneficiary-current',
+    name: 'Current Beneficiary',
+    walletAddress: address || '',
+    status: 'pending' as const,
+    verificationStatus,
+    verificationReason: rejectionReason,
+    campaignId: 'campaign-current',
+    allocatedAmount: 750,
+    claimedAmount: 500,
+    location: { country: 'Nigeria', region: 'Lagos', city: 'Lagos' },
+    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+  }
 
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
-      
+
       <main className="container py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Beneficiary Portal</h1>
-          <p className="text-muted-foreground">Claim your allocated aid and track your claim history</p>
+          <p className="text-muted-foreground">
+            Claim your allocated aid and track your claim history
+          </p>
         </div>
 
         {/* Wallet Overview */}
@@ -145,7 +204,38 @@ export default function BeneficiaryPage() {
           </Card>
         </div>
 
-        <VerificationBanner status={beneficiary.verificationStatus} rejectionReason={beneficiary.verificationReason} />
+        {/* Verification banner — shows on-chain status + rejection reason from contract */}
+        {statusLoading ? (
+          <Card className="mb-6 border-muted bg-muted/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3 text-muted-foreground text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading verification status from blockchain…
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <VerificationBanner
+            status={verificationStatus}
+            rejectionReason={rejectionReason}
+          />
+        )}
+
+        {/* Submit-in-progress indicator */}
+        {(submitState.status === 'hashing' ||
+          submitState.status === 'submitting' ||
+          submitState.status === 'polling') && (
+          <Card className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3 text-blue-700 dark:text-blue-300 text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {submitState.status === 'hashing' && 'Computing proof hash…'}
+                {submitState.status === 'submitting' && 'Submitting proof to blockchain…'}
+                {submitState.status === 'polling' && 'Waiting for on-chain confirmation…'}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Available Claims */}
         <div className="mb-8">
@@ -157,7 +247,9 @@ export default function BeneficiaryPage() {
                   <Card key={claim.id}>
                     <CardHeader>
                       <CardTitle>{claim.campaignTitle}</CardTitle>
-                      <CardDescription>{formatAmount(claim.amount)} XLM available to claim</CardDescription>
+                      <CardDescription>
+                        {formatAmount(claim.amount)} XLM available to claim
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <Button onClick={() => handleClaim(claim.id)} className="w-full" size="lg">
@@ -186,13 +278,18 @@ export default function BeneficiaryPage() {
                   <div className="text-center py-8">
                     <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-semibold mb-2">No Available Claims</h3>
-                    <p className="text-muted-foreground">New approved aid allocations will appear here.</p>
+                    <p className="text-muted-foreground">
+                      New approved aid allocations will appear here.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
             )
           ) : (
-            <VerificationWorkflow beneficiary={beneficiary} onSubmitProof={handleSubmitProof} />
+            <VerificationWorkflow
+              beneficiary={beneficiaryForWorkflow}
+              onSubmitProof={handleSubmitProof}
+            />
           )}
         </div>
 
