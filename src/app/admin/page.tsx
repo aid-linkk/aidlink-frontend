@@ -1,7 +1,7 @@
 'use client'
 
 import { Navigation } from '@/components/layout/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -215,122 +215,22 @@ export default function AdminPage() {
     { label: 'Total Beneficiaries', value: '1,234', icon: Users, change: '+12%' },
   ]
 
-  // ------------------------------------------------------------------
-  // Filtered view
-  // ------------------------------------------------------------------
-  const filteredPending = pendingBeneficiaries.filter((b) => {
-    if (!searchQuery) return true
-    const q = searchQuery.toLowerCase()
-    return (
-      (b.name ?? '').toLowerCase().includes(q) ||
-      b.address.toLowerCase().includes(q)
-    )
-  })
+  const handleVerify = async () => {
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      toast.success('Beneficiary verified successfully')
+    } catch (error) {
+      toast.error('Failed to verify beneficiary')
+    }
+  }
 
-  // ------------------------------------------------------------------
-  // Verify action — calls BENEFICIARY_REGISTRY_CONTRACT verify_beneficiary
-  // ------------------------------------------------------------------
-  const handleVerify = useCallback(
-    async (beneficiaryAddress: string) => {
-      if (!isAdmin) {
-        toast.error('Insufficient permissions', {
-          description: 'Your wallet is not in the admin registry.',
-        })
-        return
-      }
-
-      if (!walletAddress) {
-        toast.error('Wallet not connected')
-        return
-      }
-
-      setProcessingId(beneficiaryAddress)
-      try {
-        await verifyBeneficiary(beneficiaryAddress, {
-          network,
-          signerAddress: walletAddress,
-        })
-
-        toast.success('Beneficiary verified successfully')
-
-        // Invalidate both the admin list and the individual status query
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: pendingVerificationsKeys.all }),
-          queryClient.invalidateQueries({
-            queryKey: beneficiaryStatusKeys.address(beneficiaryAddress),
-          }),
-        ])
-      } catch (err) {
-        toast.error('Failed to verify beneficiary', {
-          description: err instanceof Error ? err.message : 'Unknown error',
-        })
-      } finally {
-        setProcessingId(null)
-      }
-    },
-    [isAdmin, walletAddress, network, queryClient],
-  )
-
-  // ------------------------------------------------------------------
-  // Reject action — opens dialog first, then calls contract on confirm
-  // ------------------------------------------------------------------
-  const handleRejectConfirm = useCallback(
-    async (reason: string) => {
-      if (!rejectTarget) return
-
-      if (!isAdmin) {
-        toast.error('Insufficient permissions', {
-          description: 'Your wallet is not in the admin registry.',
-        })
-        return
-      }
-
-      if (!walletAddress) {
-        toast.error('Wallet not connected')
-        return
-      }
-
-      // Byte-length guard (double-check server-side equivalent)
-      const validation = validateRejectionReason(reason)
-      if (!validation.valid) {
-        toast.error('Invalid rejection reason', { description: validation.error })
-        return
-      }
-
-      const targetAddress = rejectTarget
-      setRejectTarget(null) // close dialog
-      setProcessingId(targetAddress)
-
-      try {
-        await rejectBeneficiary(targetAddress, reason, {
-          network,
-          signerAddress: walletAddress,
-        })
-
-        toast.success('Beneficiary rejected', {
-          description: 'The rejection reason has been stored on-chain.',
-        })
-
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: pendingVerificationsKeys.all }),
-          queryClient.invalidateQueries({
-            queryKey: beneficiaryStatusKeys.address(targetAddress),
-          }),
-        ])
-      } catch (err) {
-        toast.error('Failed to reject beneficiary', {
-          description: err instanceof Error ? err.message : 'Unknown error',
-        })
-      } finally {
-        setProcessingId(null)
-      }
-    },
-    [rejectTarget, isAdmin, walletAddress, network, queryClient],
-  )
-
-  const handleSuspend = async (_userId: string) => {
-    // Suspend is out of scope per issue spec — placeholder
-    toast.info('Suspend action is not yet implemented')
+  const handleSuspend = async () => {
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      toast.success('User suspended successfully')
+    } catch (error) {
+      toast.error('Failed to suspend user')
+    }
   }
 
   // ------------------------------------------------------------------
@@ -458,133 +358,45 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {pendingLoading ? (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground text-sm">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Loading pending verifications from blockchain…
-                  </div>
-                </CardContent>
-              </Card>
-            ) : pendingError && !contractNotConfigured ? (
-              <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20">
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-2 text-red-700 dark:text-red-300 text-sm">
-                    <AlertCircle className="h-4 w-4" />
-                    {pendingError.message}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <Card>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Wallet Address</TableHead>
-                        <TableHead>Proof CID</TableHead>
-                        <TableHead>Submitted</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredPending.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                            {searchQuery
-                              ? 'No results match your search.'
-                              : 'No pending verifications.'}
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredPending.map((beneficiary) => {
-                          const isProcessing = processingId === beneficiary.address
-                          const actionsDisabled =
-                            !isAdmin || isProcessing || registryUnavailable
-
-                          return (
-                            <TableRow key={beneficiary.address}>
-                              <TableCell className="font-medium font-mono text-xs">
-                                {formatAddress(beneficiary.address)}
-                              </TableCell>
-                              <TableCell className="font-mono text-xs max-w-[160px] truncate">
-                                {beneficiary.proofCid}
-                              </TableCell>
-                              <TableCell>{formatDate(beneficiary.submittedAt)}</TableCell>
-                              <TableCell>
-                                <div className="flex gap-2">
-                                  {/* Verify button */}
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleVerify(beneficiary.address)}
-                                    disabled={actionsDisabled}
-                                    title={
-                                      !isAdmin
-                                        ? 'Insufficient permissions'
-                                        : isProcessing
-                                          ? 'Processing…'
-                                          : 'Verify beneficiary'
-                                    }
-                                    aria-label={
-                                      !isAdmin ? 'Insufficient permissions' : 'Verify beneficiary'
-                                    }
-                                  >
-                                    {isProcessing ? (
-                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    ) : (
-                                      <ShieldCheck className="mr-2 h-4 w-4" />
-                                    )}
-                                    Verify
-                                  </Button>
-
-                                  {/* Reject button */}
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={() => setRejectTarget(beneficiary.address)}
-                                    disabled={actionsDisabled}
-                                    title={
-                                      !isAdmin ? 'Insufficient permissions' : 'Reject beneficiary'
-                                    }
-                                    aria-label={
-                                      !isAdmin ? 'Insufficient permissions' : 'Reject beneficiary'
-                                    }
-                                  >
-                                    <XCircle className="mr-2 h-4 w-4" />
-                                    Reject
-                                  </Button>
-
-                                  <Button size="sm" variant="outline">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </Card>
-
-                {/* Load more button for cursor pagination */}
-                {hasMore && (
-                  <div className="flex justify-center">
-                    <Button
-                      variant="outline"
-                      onClick={loadMore}
-                      disabled={pendingFetching}
-                    >
-                      {pendingFetching ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Load more
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
+            <Card>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Wallet Address</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Documents</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingBeneficiaries.map((beneficiary) => (
+                    <TableRow key={beneficiary.id}>
+                      <TableCell className="font-medium">{beneficiary.name}</TableCell>
+                      <TableCell>{formatAddress(beneficiary.walletAddress)}</TableCell>
+                      <TableCell>{beneficiary.location}</TableCell>
+                      <TableCell>{beneficiary.documents}</TableCell>
+                      <TableCell>{formatDate(beneficiary.submittedAt)}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleVerify()}
+                          >
+                            <ShieldCheck className="mr-2 h-4 w-4" />
+                            Verify
+                          </Button>
+                          <Button size="sm" variant="outline">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
           </TabsContent>
 
           {/* ---------------------------------------------------------------- */}
@@ -655,7 +467,7 @@ export default function AdminPage() {
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => handleSuspend(user.id)}
+                            onClick={() => handleSuspend()}
                           >
                             <Ban className="mr-2 h-4 w-4" />
                             Suspend

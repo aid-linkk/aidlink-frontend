@@ -20,7 +20,6 @@ import {
   TrendingUp, 
   Wallet, 
   ArrowUpRight, 
-  Clock, 
   CheckCircle2,
   AlertCircle,
   Plus,
@@ -48,7 +47,7 @@ export default function DashboardPage() {
       to: 'Emergency Relief Campaign',
       amount: 500,
       status: 'completed' as const,
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
+      timestamp: new Date(Date.now() - 3600000),
     },
     {
       id: '2',
@@ -56,7 +55,7 @@ export default function DashboardPage() {
       to: 'Medical Supplies Campaign',
       amount: 250,
       status: 'completed' as const,
-      timestamp: new Date(Date.now() - 86400000).toISOString(),
+      timestamp: new Date(Date.now() - 86400000),
     },
     {
       id: '3',
@@ -64,7 +63,7 @@ export default function DashboardPage() {
       to: 'Beneficiary #1234',
       amount: 100,
       status: 'completed' as const,
-      timestamp: new Date(Date.now() - 172800000).toISOString(),
+      timestamp: new Date(Date.now() - 172800000),
     },
   ]
 
@@ -158,7 +157,7 @@ export default function DashboardPage() {
               <StatsCardSkeleton />
             </>
           ) : (
-            stats.map((stat, index) => (
+            stats.map((stat) => (
               <Card key={stat.label}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
@@ -297,7 +296,7 @@ export default function DashboardPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {new Date(tx.timestamp).toLocaleDateString()}
+                          {tx.timestamp.toLocaleDateString()}
                         </TableCell>
                       </TableRow>
                     ))
