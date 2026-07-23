@@ -14,6 +14,7 @@ import {
   StatsCardSkeleton,
   TableRowSkeleton,
 } from '@/components/features/loading/skeleton-card'
+import { FeeConfirmationDialog } from '@/components/features/donations/fee-confirmation-dialog'
 import {
   Calendar,
   MapPin,
@@ -22,20 +23,41 @@ import {
   Share2,
   Clock,
   CheckCircle2,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { formatAmount, formatDate } from '@/lib/utils'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
+import { useDonation, WalletNotConnectedError } from '@/hooks/use-donation'
+import { useRouter } from 'next/navigation'
+import { calculateCampaignProgress } from '@/lib/utils'
 
-export default function CampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = React.use(params)
+// Horizon testnet explorer base URL for transaction links
+const HORIZON_EXPLORER_BASE = 'https://stellar.expert/explorer/testnet/tx'
+
+export default function CampaignDetailPage({ params }: { params: { id: string } }) {
+  const campaignId = params.id
+  const queryClient = useQueryClient()
+  const router = useRouter()
+
   const [isLoading, setIsLoading] = useState(true)
   const [donationAmount, setDonationAmount] = useState('')
-  const [isDonating, setIsDonating] = useState(false)
+
+  const { state: donationState, donate, reset: resetDonation, feeConfirmed, feeDismissed } =
+    useDonation(campaignId)
+
+  // Derive a simple boolean for the button spinner
+  const isDonating =
+    donationState.status !== 'idle' &&
+    donationState.status !== 'success' &&
+    donationState.status !== 'error' &&
+    donationState.status !== 'awaiting-confirmation'
 
   const campaign = {
-    id: id,
+    id: campaignId,
     title: 'Emergency Relief for Flood Victims',
     description:
       'Providing immediate relief to families affected by severe flooding in the region. Funds will be used for food, shelter, and medical supplies. This campaign aims to support 500 families who have lost their homes and livelihoods due to the devastating floods.',
@@ -61,46 +83,142 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
 
   const recentDonations = [
     { id: '1', donor: 'Anonymous', amount: 500, timestamp: new Date(Date.now() - 3600000).toISOString() },
-    { id: '2', donor: '0x1234...5678', amount: 250, timestamp: new Date(Date.now() - 7200000).toISOString() },
+    { id: '2', donor: 'GABC...5678', amount: 250, timestamp: new Date(Date.now() - 7200000).toISOString() },
     { id: '3', donor: 'Anonymous', amount: 1000, timestamp: new Date(Date.now() - 14400000).toISOString() },
   ]
 
+  // ---------------------------------------------------------------------------
+  // React to donation state changes
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (donationState.status === 'success' && donationState.txHash) {
+      const msg = donationState.isDuplicate
+        ? `Duplicate submission detected — original transaction: ${donationState.txHash.slice(0, 8)}…`
+        : `Thank you for donating ${formatAmount(parseFloat(donationAmount || '0'))} XLM`
+
+      toast.success('Donation successful!', { description: msg })
+      setDonationAmount('')
+
+      // Invalidate campaign query so raisedAmount re-fetches from the contract
+      queryClient.invalidateQueries({ queryKey: ['campaigns', campaignId] })
+
+      // Reset hook state after a short delay so the success badge is visible
+      const timer = setTimeout(() => resetDonation(), 5000)
+      return () => clearTimeout(timer)
+    }
+
+    if (donationState.status === 'error' && donationState.error) {
+      toast.error('Donation failed', { description: donationState.error })
+    }
+  }, [donationState.status, donationState.txHash, donationState.error]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---------------------------------------------------------------------------
+  // handleDonate
+  // ---------------------------------------------------------------------------
   const handleDonate = async () => {
-    if (!donationAmount || parseFloat(donationAmount) <= 0) {
+    const amount = parseFloat(donationAmount)
+
+    if (!donationAmount || isNaN(amount) || amount <= 0) {
       toast.error('Please enter a valid donation amount')
       return
     }
 
-    setIsDonating(true)
+    // Stellar minimum: 1 stroop = 0.0000001 XLM
+    if (amount < 0.0000001) {
+      toast.error('Minimum donation is 0.0000001 XLM (1 stroop)')
+      return
+    }
+
+    // Validate precision: no more than 7 decimal places
+    const decimalPart = donationAmount.split('.')[1]
+    if (decimalPart && decimalPart.length > 7) {
+      toast.error('Maximum precision is 7 decimal places (1 stroop = 0.0000001 XLM)')
+      return
+    }
+
     try {
-      // Simulate donation process
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-      toast.success('Donation successful!', {
-        description: `Thank you for donating ${formatAmount(parseFloat(donationAmount))} XLM`,
-      })
-      setDonationAmount('')
-    } catch (error) {
-      toast.error('Donation failed', {
-        description: 'Please try again later',
-      })
-    } finally {
-      setIsDonating(false)
+      await donate(amount)
+    } catch (err) {
+      if (err instanceof WalletNotConnectedError) {
+        toast.error('Wallet not connected', {
+          description: 'Please connect your wallet to make a donation',
+        })
+        router.push('/auth')
+      } else {
+        toast.error('Donation failed', {
+          description: err instanceof Error ? err.message : 'Please try again later',
+        })
+      }
     }
   }
 
-  const progress = (campaign.raisedAmount / campaign.targetAmount) * 100
+  // ---------------------------------------------------------------------------
+  // Derived UI state
+  // ---------------------------------------------------------------------------
+  const progress = calculateCampaignProgress(campaign.raisedAmount, campaign.targetAmount)
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 600)
-
+    const timer = setTimeout(() => setIsLoading(false), 600)
     return () => clearTimeout(timer)
   }, [])
+
+  // ---------------------------------------------------------------------------
+  // Donate button label
+  // ---------------------------------------------------------------------------
+  function getDonateButtonLabel() {
+    switch (donationState.status) {
+      case 'fetching-fee':
+        return (
+          <span className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Calculating fee…
+          </span>
+        )
+      case 'signing':
+        return (
+          <span className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Waiting for signature…
+          </span>
+        )
+      case 'submitting':
+        return (
+          <span className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Submitting…
+          </span>
+        )
+      case 'polling':
+        return (
+          <span className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Confirming on-chain…
+          </span>
+        )
+      case 'success':
+        return (
+          <span className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Donation confirmed!
+          </span>
+        )
+      default:
+        return 'Donate Now'
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
+
+      {/* Fee confirmation dialog — shown when useDonation needs user to confirm fee */}
+      <FeeConfirmationDialog
+        open={donationState.status === 'awaiting-confirmation'}
+        estimatedFeeXlm={donationState.estimatedFee}
+        donationAmountXlm={parseFloat(donationAmount || '0')}
+        onConfirm={feeConfirmed}
+        onCancel={feeDismissed}
+      />
 
       <main className="container py-8">
         <Link href="/campaigns" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-6">
@@ -286,6 +404,36 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
                 </Card>
               </TabsContent>
             </Tabs>
+
+            {/* Last confirmed transaction link (shown after success) */}
+            {donationState.status === 'success' && donationState.txHash && (
+              <Card className="border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20">
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-medium text-green-900 dark:text-green-100 mb-1">
+                        Donation confirmed on-chain
+                        {donationState.isDuplicate && (
+                          <Badge variant="secondary" className="ml-2 text-xs">
+                            Duplicate — original hash
+                          </Badge>
+                        )}
+                      </p>
+                      <a
+                        href={`${HORIZON_EXPLORER_BASE}/${donationState.txHash}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 font-mono text-xs text-green-700 dark:text-green-300 hover:underline break-all"
+                      >
+                        {donationState.txHash}
+                        <ExternalLink className="h-3 w-3 shrink-0" />
+                      </a>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -310,10 +458,12 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
                       <Input
                         id="amount"
                         type="number"
-                        placeholder="Enter amount"
+                        placeholder="Enter amount (min. 0.0000001)"
                         value={donationAmount}
                         onChange={(e) => setDonationAmount(e.target.value)}
-                        min="1"
+                        min="0.0000001"
+                        step="0.0000001"
+                        disabled={isDonating || donationState.status === 'success'}
                       />
                     </div>
                     <div className="grid grid-cols-3 gap-2">
@@ -323,6 +473,7 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
                           variant="outline"
                           size="sm"
                           onClick={() => setDonationAmount(amount.toString())}
+                          disabled={isDonating || donationState.status === 'success'}
                         >
                           {amount} XLM
                         </Button>
@@ -330,12 +481,24 @@ export default function CampaignDetailPage({ params }: { params: Promise<{ id: s
                     </div>
                     <Button
                       onClick={handleDonate}
-                      disabled={isDonating || !donationAmount}
+                      disabled={
+                        isDonating ||
+                        !donationAmount ||
+                        donationState.status === 'success'
+                      }
                       className="w-full"
                       size="lg"
                     >
-                      {isDonating ? 'Processing...' : 'Donate Now'}
+                      {getDonateButtonLabel()}
                     </Button>
+
+                    {/* Error message */}
+                    {donationState.status === 'error' && donationState.error && (
+                      <p className="text-sm text-destructive text-center">
+                        {donationState.error}
+                      </p>
+                    )}
+
                     <p className="text-xs text-center text-muted-foreground">
                       Your donation will be processed securely on the Stellar blockchain
                     </p>

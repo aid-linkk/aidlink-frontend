@@ -1,101 +1,88 @@
-import freighterApi from '@stellar/freighter-api'
-import { 
-  WalletAdapter, 
-  FreighterAdapter, 
-  WalletKitAdapter, 
-  StellarNetwork,
-  WalletInfo 
-} from './adapters'
-import { NoActiveWalletError } from './errors'
+import * as freighterApi from '@stellar/freighter-api'
+import { WalletKit } from '@stellar/wallet-sdk'
+import { getSorobanSDK, type NetworkName } from '../soroban/sdk'
+import { useWalletStore } from '@/store/wallet-store'
 
-export type { WalletInfo, StellarNetwork }
+export interface WalletInfo {
+  publicKey: string
+  address: string
+  network: string
+}
 
-export type WalletId = 'freighter' | 'rabet' | 'xbull'
+/**
+ * Freighter's own short network names, as returned by getNetwork()/
+ * getNetworkDetails() in @stellar/freighter-api. Freighter has no concept
+ * of 'standalone' — that carve-out is handled separately wherever this map
+ * is consulted (see NetworkGuard and useWalletEnhanced.switchNetwork).
+ */
+export type FreighterNetwork = 'TESTNET' | 'PUBLIC' | 'FUTURENET' | 'STANDALONE'
+
+export const FREIGHTER_NETWORK_MAP: Record<NetworkName, FreighterNetwork> = {
+  testnet: 'TESTNET',
+  mainnet: 'PUBLIC',
+  futurenet: 'FUTURENET',
+  standalone: 'STANDALONE',
+}
+
+const FREIGHTER_TO_APP_NETWORK: Record<string, NetworkName> = {
+  TESTNET: 'testnet',
+  PUBLIC: 'mainnet',
+  FUTURENET: 'futurenet',
+}
 
 export class WalletService {
-  private _activeAdapter: WalletAdapter | null = null
-  private _adapterCache: Map<string, WalletAdapter> = new Map()
-  private _networkChangeUnsubscribe: (() => void) | null = null
+  private walletKit: WalletKit
 
-  /**
-   * Connect to a wallet and set it as the active adapter
-   * @param walletId - The wallet to connect to ('freighter' | 'rabet' | 'xbull')
-   * @param network - The Stellar network to use
-   * @returns WalletInfo containing publicKey, address, and network
-   */
-  async connect(walletId: WalletId, network: StellarNetwork): Promise<WalletInfo> {
-    // Create adapter key for caching
-    const adapterKey = `${walletId}-${network}`
-
-    // Get or create adapter
-    let adapter: WalletAdapter
-    if (this._adapterCache.has(adapterKey)) {
-      adapter = this._adapterCache.get(adapterKey)!
-    } else {
-      adapter = this._createAdapter(walletId, network)
-      this._adapterCache.set(adapterKey, adapter)
-    }
-
-    // Connect the adapter
-    const walletInfo = await adapter.connect()
-
-    // Set as active adapter (replaces any previous adapter)
-    this._activeAdapter = adapter
-
-    // Subscribe to Freighter network changes if connecting to Freighter
-    if (walletId === 'freighter') {
-      await this._subscribeToFreighterNetworkChange()
-    }
-
-    return walletInfo
+  constructor() {
+    this.walletKit = new WalletKit({
+      network: 'testnet',
+    })
   }
 
-  /**
-   * Sign a transaction with the active wallet adapter
-   * @param xdr - The transaction XDR to sign
-   * @returns Signed transaction XDR
-   * @throws NoActiveWalletError if no wallet is connected
-   */
-  async sign(xdr: string): Promise<string> {
-    if (!this._activeAdapter) {
-      throw new NoActiveWalletError('No wallet is connected. Call connect() first.')
+  async isFreighterConnected(): Promise<boolean> {
+    try {
+      const { isConnected, error } = await freighterApi.isConnected()
+      if (error) return false
+      return isConnected
+    } catch (error) {
+      console.error('Error checking Freighter connection:', error)
+      return false
     }
 
     const currentNetwork = this.getCurrentNetwork()
     return await this._activeAdapter.sign(xdr, currentNetwork)
   }
 
-  /**
-   * Disconnect the active wallet
-   */
-  async disconnect(): Promise<void> {
-    if (this._activeAdapter) {
-      await this._activeAdapter.disconnect()
-      this._activeAdapter = null
-    }
+  async connectFreighter(): Promise<WalletInfo> {
+    try {
+      const { address, error } = await freighterApi.getAddress()
+      if (error || !address) {
+        throw new Error(error ? String(error) : 'No address returned by Freighter')
+      }
 
-    // Unsubscribe from network changes
-    if (this._networkChangeUnsubscribe) {
-      this._networkChangeUnsubscribe()
-      this._networkChangeUnsubscribe = null
+      const freighterNetwork = await this.getNetwork()
+      const network = FREIGHTER_TO_APP_NETWORK[freighterNetwork] ?? 'testnet'
+
+      return {
+        publicKey: address,
+        address,
+        network,
+      }
+    } catch (error) {
+      console.error('Error connecting Freighter:', error)
+      throw new Error('Failed to connect Freighter wallet')
     }
   }
 
-  /**
-   * Get the current network from WalletStore (single source of truth)
-   * @returns The current network
-   */
-  getCurrentNetwork(): StellarNetwork {
-    // Import dynamically to avoid circular dependency
-    if (typeof window !== 'undefined') {
-      try {
-        const { useWalletStore } = require('@/store/wallet-store')
-        const state = useWalletStore.getState()
-        return state.network as StellarNetwork
-      } catch (error) {
-        console.warn('Failed to get network from WalletStore', error)
-        // Propagate the error — callers should not proceed without a known network
-        throw new Error('Unable to determine current network from WalletStore')
+  async connectWalletKit(): Promise<WalletInfo> {
+    try {
+      const { publicKey } = await this.walletKit.getAddress()
+      const address = publicKey
+
+      return {
+        publicKey,
+        address,
+        network: 'testnet',
       }
     }
     // Server-side: WalletStore is not available. Throw so callers handle the case.

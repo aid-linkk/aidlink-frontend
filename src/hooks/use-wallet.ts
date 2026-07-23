@@ -55,6 +55,14 @@ export function useDisconnectWallet() {
   })
 }
 
+/**
+ * @deprecated This mutation only updates `walletStore.network` after a fake
+ * delay — it does not verify Freighter's actual network, does not recreate
+ * the SorobanSDK for the new network, and does not invalidate React Query
+ * caches. Switching networks this way leaves the SDK/signing layer frozen
+ * on the previous network (issue #105). Use `useWalletEnhanced().switchNetwork`
+ * instead, which performs the full atomic switch.
+ */
 export function useSwitchNetwork() {
   const switchNetwork = useWalletStore((state) => state.switchNetwork)
 
