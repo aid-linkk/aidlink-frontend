@@ -4,6 +4,7 @@ jest.mock('@/components/layout/navigation', () => ({
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
+  useParams: () => ({ id: 'campaign-1' }),
 }))
 
 // Mock the wallet store so the page can render without a real wallet
@@ -60,9 +61,7 @@ describe('CampaignDetailPage', () => {
   it('shows loading placeholders and then campaign content', () => {
     jest.useFakeTimers()
 
-    const { container } = renderWithProviders(
-      <CampaignDetailPage params={{ id: 'campaign-1' }} />,
-    )
+    const { container } = renderWithProviders(<CampaignDetailPage />)
 
     expect(container.querySelector('.animate-pulse')).toBeTruthy()
     expect(screen.queryByText('Emergency Relief for Flood Victims')).toBeNull()

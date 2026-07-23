@@ -32,13 +32,14 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useQueryClient } from '@tanstack/react-query'
 import { useDonation, WalletNotConnectedError } from '@/hooks/use-donation'
-import { useRouter } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { calculateCampaignProgress } from '@/lib/utils'
 
 // Horizon testnet explorer base URL for transaction links
 const HORIZON_EXPLORER_BASE = 'https://stellar.expert/explorer/testnet/tx'
 
-export default function CampaignDetailPage({ params }: { params: { id: string } }) {
+export default function CampaignDetailPage() {
+  const params = useParams<{ id: string }>()
   const campaignId = params.id
   const queryClient = useQueryClient()
   const router = useRouter()
