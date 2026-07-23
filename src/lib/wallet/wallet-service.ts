@@ -48,6 +48,9 @@ export class WalletService {
       console.error('Error checking Freighter connection:', error)
       return false
     }
+
+    const currentNetwork = this.getCurrentNetwork()
+    return await this._activeAdapter.sign(xdr, currentNetwork)
   }
 
   async connectFreighter(): Promise<WalletInfo> {
@@ -81,68 +84,76 @@ export class WalletService {
         address,
         network: 'testnet',
       }
-    } catch (error) {
-      console.error('Error connecting WalletKit:', error)
-      throw new Error('Failed to connect wallet')
+    }
+    // Server-side: WalletStore is not available. Throw so callers handle the case.
+    throw new Error('WalletStore is not available in this environment')
+  }
+
+  /**
+   * Get the active wallet ID
+   * @returns The wallet ID or null if no wallet is connected
+   */
+  getActiveWalletId(): WalletId | null {
+    if (!this._activeAdapter) {
+      return null
+    }
+    return this._activeAdapter.walletId as WalletId
+  }
+
+  /**
+   * Check if a wallet is currently connected
+   */
+  isConnected(): boolean {
+    return this._activeAdapter !== null
+  }
+
+  /**
+   * Create an adapter instance for the given wallet ID and network
+   */
+  private _createAdapter(walletId: WalletId, network: StellarNetwork): WalletAdapter {
+    if (walletId === 'freighter') {
+      return new FreighterAdapter()
+    } else if (walletId === 'rabet' || walletId === 'xbull') {
+      return new WalletKitAdapter(walletId, network)
+    } else {
+      throw new Error(`Unsupported wallet: ${walletId}`)
     }
   }
 
   /**
-   * Signs a transaction against the currently active network.
-   *
-   * Previously this hardcoded 'testnet' as the (nonexistent, positional)
-   * second argument to Freighter's signTransaction. That was already wrong
-   * against the real @stellar/freighter-api@6.0.1 surface, which takes an
-   * options object keyed by `networkPassphrase` — Freighter validates the
-   * transaction's embedded network passphrase against this value, not a
-   * short network code. We resolve the passphrase from the active network
-   * (read from the wallet store at call time, or an explicit override) via
-   * the SorobanSDK factory, so it is never stale.
+   * Subscribe to Freighter's network change events (if available)
+   * and sync with WalletStore
    */
-  async signTransaction(xdr: string, network?: NetworkName): Promise<string> {
+  private async _subscribeToFreighterNetworkChange(): Promise<void> {
     try {
-      const activeNetwork = network ?? useWalletStore.getState().network
-      const networkPassphrase = getSorobanSDK(activeNetwork).networkPassphrase
+      // Check if Freighter supports network change events
+      // The functional API may support event listeners via WatchWalletChanges
+      // This is a best-effort approach and may not be available in all versions
+      if (typeof (freighterApi as any).on === 'function') {
+        const handler = (network: string) => {
+          // Sync network change to WalletStore
+          if (typeof window !== 'undefined') {
+            try {
+              const { useWalletStore } = require('@/store/wallet-store')
+              useWalletStore.getState().switchNetwork(network as StellarNetwork)
+            } catch (error) {
+              console.error('Failed to sync network change to WalletStore', error)
+            }
+          }
+        }
 
-      const { signedTxXdr, error } = await freighterApi.signTransaction(xdr, {
-        networkPassphrase,
-      })
-      if (error) {
-        throw new Error(String(error))
+        (freighterApi as any).on('networkChanged', handler)
+
+        // Store unsubscribe function
+        this._networkChangeUnsubscribe = () => {
+          if (typeof (freighterApi as any).off === 'function') {
+            (freighterApi as any).off('networkChanged', handler)
+          }
+        }
       }
-      return signedTxXdr
     } catch (error) {
-      console.error('Error signing transaction:', error)
-      throw new Error('Failed to sign transaction')
-    }
-  }
-
-  /**
-   * Returns Freighter's current short network name (e.g. 'TESTNET',
-   * 'PUBLIC', 'FUTURENET'). Freighter has no 'STANDALONE' concept; callers
-   * comparing against a store network of 'standalone' should skip this
-   * check entirely rather than expect a match here.
-   */
-  async getNetwork(): Promise<FreighterNetwork> {
-    try {
-      const { network, error } = await freighterApi.getNetwork()
-      if (error || !network) {
-        return 'TESTNET'
-      }
-      return network as FreighterNetwork
-    } catch (error) {
-      console.error('Error getting network:', error)
-      return 'TESTNET'
-    }
-  }
-
-  async disconnect(): Promise<void> {
-    // Freighter doesn't have a disconnect method, but we can clear local state
-    // WalletKit may have disconnect functionality
-    try {
-      // Clear any session data if needed
-    } catch (error) {
-      console.error('Error disconnecting wallet:', error)
+      // Network change subscription is optional; don't fail if unsupported
+      console.warn('Freighter network change subscription not available', error)
     }
   }
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { Navigation } from '@/components/layout/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
