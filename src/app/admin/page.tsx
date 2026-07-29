@@ -1,4 +1,4 @@
-'use client'
+'use client';
 
 import { Navigation } from '@/components/layout/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -21,8 +21,10 @@ import {
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { formatAddress, formatAmount, formatDate } from '@/lib/utils'
+import { useLocale } from 'next-intl'
 
 export default function AdminPage() {
+  const locale = useLocale()
   const [searchQuery, setSearchQuery] = useState('')
 
   const pendingBeneficiaries = [
@@ -83,24 +85,37 @@ export default function AdminPage() {
     { label: 'Active Campaigns', value: '12', icon: TrendingUp, change: '+2' },
     { label: 'Flagged Users', value: '3', icon: AlertCircle, change: '-1' },
   ]
+import React, { useState } from 'react';
+import { withRequireRole } from '@/components/providers/auth-provider';
+import { beneficiaryRegistryClient } from '@/lib/soroban/beneficiary-registry';
+import { toast } from 'sonner';
+
+function AdminPage() {
+  const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const handleVerify = async (beneficiaryId: string) => {
+    setLoadingId(beneficiaryId);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      toast.success('Beneficiary verified successfully')
-    } catch (error) {
-      toast.error('Failed to verify beneficiary')
+      await beneficiaryRegistryClient.updateVerificationStatus(beneficiaryId, 1);
+      toast.success(`Beneficiary ${beneficiaryId} verified on-chain.`);
+    } catch (err) {
+      toast.error('Failed to verify beneficiary on contract');
+    } finally {
+      setLoadingId(null);
     }
-  }
+  };
 
-  const handleSuspend = async (userId: string) => {
+  const handleSuspend = async (beneficiaryId: string) => {
+    setLoadingId(beneficiaryId);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      toast.success('User suspended successfully')
-    } catch (error) {
-      toast.error('Failed to suspend user')
+      await beneficiaryRegistryClient.updateVerificationStatus(beneficiaryId, 2);
+      toast.warning(`Beneficiary ${beneficiaryId} suspended.`);
+    } catch (err) {
+      toast.error('Failed to suspend beneficiary on contract');
+    } finally {
+      setLoadingId(null);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -172,7 +187,7 @@ export default function AdminPage() {
                       <TableCell>{formatAddress(beneficiary.walletAddress)}</TableCell>
                       <TableCell>{beneficiary.location}</TableCell>
                       <TableCell>{beneficiary.documents}</TableCell>
-                      <TableCell>{formatDate(beneficiary.submittedAt)}</TableCell>
+                      <TableCell>{formatDate(beneficiary.submittedAt, locale)}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Button
@@ -207,7 +222,7 @@ export default function AdminPage() {
                           By {campaign.organizer}
                         </div>
                         <div className="flex items-center gap-4 text-sm">
-                          <span>{formatAmount(campaign.raisedAmount)} / {formatAmount(campaign.targetAmount)} XLM</span>
+                          <span>{formatAmount(campaign.raisedAmount, 2, locale)} / {formatAmount(campaign.targetAmount, 2, locale)} XLM</span>
                           <Badge variant="secondary">{campaign.status}</Badge>
                         </div>
                       </div>
@@ -247,7 +262,7 @@ export default function AdminPage() {
                       <TableCell>
                         <Badge variant="destructive">{user.flagReason}</Badge>
                       </TableCell>
-                      <TableCell>{formatDate(user.flaggedAt)}</TableCell>
+                      <TableCell>{formatDate(user.flaggedAt, locale)}</TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Button
@@ -271,6 +286,34 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </main>
+    <div className="container mx-auto p-6 space-y-6">
+      <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+      <p className="text-muted-foreground">Manage beneficiary verifications and platform security.</p>
+      
+      <div className="border rounded-lg p-4 bg-card space-y-4">
+        <h2 className="text-xl font-semibold">Beneficiary Actions</h2>
+        <div className="flex items-center justify-between p-3 border rounded">
+          <span>Beneficiary ID: G_EXAMPLE_BENEFICIARY</span>
+          <div className="space-x-2">
+            <button
+              onClick={() => handleVerify('G_EXAMPLE_BENEFICIARY')}
+              disabled={loadingId === 'G_EXAMPLE_BENEFICIARY'}
+              className="px-3 py-1 bg-green-600 text-white rounded text-sm disabled:opacity-50"
+            >
+              Verify
+            </button>
+            <button
+              onClick={() => handleSuspend('G_EXAMPLE_BENEFICIARY')}
+              disabled={loadingId === 'G_EXAMPLE_BENEFICIARY'}
+              className="px-3 py-1 bg-red-600 text-white rounded text-sm disabled:opacity-50"
+            >
+              Suspend
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
-  )
+  );
 }
+
+export default withRequireRole(AdminPage, ['admin']);

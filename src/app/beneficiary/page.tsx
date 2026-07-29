@@ -1,19 +1,41 @@
 'use client'
 
-import { Navigation } from '@/components/layout/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import React, { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { AlertCircle, Loader2, RefreshCw, ShieldCheck, ShieldOff } from 'lucide-react'
+import { withRequireRole } from '@/components/providers/auth-provider'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { QRCodeSVG } from 'qrcode.react'
-import { Wallet, QrCode, History, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
+import { AllocationCard } from '@/components/beneficiary/AllocationCard'
+import { VerificationBanner } from '@/components/beneficiary/VerificationBanner'
 import { useWalletStore } from '@/store/wallet-store'
 import { formatAddress, formatAmount, formatDate } from '@/lib/utils'
+import { useLocale } from 'next-intl'
+import type { ProofSubmissionPayload } from '@/components/beneficiary/ProofSubmissionForm'
+import type { Beneficiary } from '@/types'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
 export default function BeneficiaryPage() {
+  const locale = useLocale()
   const { address, balance, isConnected } = useWalletStore()
   const [showQR, setShowQR] = useState(false)
+  const [beneficiary, setBeneficiary] = useState<Beneficiary>({
+    id: 'beneficiary-current',
+    name: 'Current Beneficiary',
+    walletAddress: address || '',
+    status: 'pending',
+    verificationStatus: 'unverified',
+    campaignId: 'campaign-current',
+    allocatedAmount: 750,
+    claimedAmount: 500,
+    location: {
+      country: 'Nigeria',
+      region: 'Lagos',
+      city: 'Lagos',
+    },
+    createdAt: new Date(Date.now() - 7 * 86400000).toISOString(),
+  })
 
   if (!isConnected) {
     return (
@@ -49,30 +71,68 @@ export default function BeneficiaryPage() {
   const availableClaims = claims.filter((c) => c.status === 'pending')
   const completedClaims = claims.filter((c) => c.status === 'completed')
 
-  const handleClaim = async (claimId: string) => {
+  const handleClaim = async (_claimId: string) => {
     try {
       // Simulate claim process
       await new Promise((resolve) => setTimeout(resolve, 2000))
       toast.success('Aid claimed successfully!', {
         description: 'Your claim has been processed on the blockchain',
       })
-    } catch (error) {
+    } catch {
       toast.error('Failed to claim aid', {
         description: 'Please try again later',
       })
     }
   }
 
+  const handleSubmitProof = async ({ proof, submittedAt }: ProofSubmissionPayload) => {
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    setBeneficiary((currentBeneficiary) => ({
+      ...currentBeneficiary,
+      walletAddress: address || currentBeneficiary.walletAddress,
+      status: 'pending',
+      verificationStatus: 'pending',
+      verificationProof: proof,
+      verificationSubmittedAt: submittedAt,
+      verificationReason: undefined,
+      verificationRejectedAt: undefined,
+    }))
+    toast.success('Verification proof submitted', {
+      description: 'Your proof is now under review.',
+    })
+  }
+
+  const isVerified = beneficiary.verificationStatus === 'verified'
+
   return (
-    <div className="min-h-screen bg-background">
-      <Navigation />
-      
-      <main className="container py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Beneficiary Portal</h1>
-          <p className="text-muted-foreground">
-            Claim your allocated aid and track your claim history
-          </p>
+    <div className="container mx-auto max-w-4xl px-4 py-8 space-y-8">
+      {/* ── Header ── */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Beneficiary Portal</h1>
+        <p className="text-muted-foreground mt-1">
+          Manage your aid disbursements. Each QR code below is a signed claim
+          token unique to your wallet.
+        </p>
+      </div>
+
+      {/* ── Verification status banner ── */}
+      {!statusLoading && (
+        <VerificationBanner status={verificationStatus} />
+      )}
+
+      {/* ── Not verified gate ── */}
+      {!statusLoading && !isVerified && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+          <ShieldOff className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" aria-hidden />
+          <div>
+            <p className="font-medium text-amber-900 text-sm">Identity verification required</p>
+            <p className="text-sm text-amber-800 mt-0.5">
+              Your identity must be verified before you can claim aid.{' '}
+              {verificationStatus === 'pending'
+                ? 'Your submission is under review — check back soon.'
+                : 'Submit your proof documents to begin the process.'}
+            </p>
+          </div>
         </div>
 
         {/* Wallet Overview */}
@@ -93,7 +153,7 @@ export default function BeneficiaryPage() {
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatAmount(balance)} XLM</div>
+              <div className="text-2xl font-bold">{formatAmount(balance, 2, locale)} XLM</div>
             </CardContent>
           </Card>
 
@@ -108,46 +168,47 @@ export default function BeneficiaryPage() {
           </Card>
         </div>
 
+        <VerificationBanner status={beneficiary.verificationStatus} rejectionReason={beneficiary.verificationReason} />
+
         {/* Available Claims */}
-        {availableClaims.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Available Claims</h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              {availableClaims.map((claim) => (
-                <Card key={claim.id}>
-                  <CardHeader>
-                    <CardTitle>{claim.campaignTitle}</CardTitle>
-                    <CardDescription>
-                      {formatAmount(claim.amount)} XLM available to claim
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <Button
-                      onClick={() => handleClaim(claim.id)}
-                      className="w-full"
-                      size="lg"
-                    >
-                      Claim Aid
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowQR(!showQR)}
-                      className="w-full"
-                    >
-                      <QrCode className="mr-2 h-4 w-4" />
-                      {showQR ? 'Hide QR Code' : 'Show QR Code'}
-                    </Button>
-                    {showQR && (
-                      <div className="flex justify-center p-4 bg-white rounded-lg">
-                        <QRCodeSVG value={address || ''} size={200} />
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Available Claims</h2>
+          {isVerified ? (
+            availableClaims.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                {availableClaims.map((claim) => (
+                  <Card key={claim.id}>
+                    <CardHeader>
+                      <CardTitle>{claim.campaignTitle}</CardTitle>
+                      <CardDescription>{formatAmount(claim.amount, 2, locale)} XLM available to claim</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Button onClick={() => handleClaim(claim.id)} className="w-full" size="lg">
+                        Claim Aid
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowQR(!showQR)}
+                        className="w-full"
+                      >
+                        <QrCode className="mr-2 h-4 w-4" />
+                        {showQR ? 'Hide QR Code' : 'Show QR Code'}
+                      </Button>
+                      {showQR && (
+                        <div className="flex justify-center rounded-lg bg-white p-4">
+                          <QRCodeSVG value={address || ''} size={200} />
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <RefreshCw className="h-4 w-4" aria-hidden />
+            )}
+            <span className="ml-1.5">Refresh</span>
+          </Button>
+        </div>
 
         {/* Claim History */}
         <div>
@@ -161,10 +222,10 @@ export default function BeneficiaryPage() {
                       <div className="flex-1">
                         <div className="font-semibold mb-1">{claim.campaignTitle}</div>
                         <div className="text-sm text-muted-foreground">
-                          Claimed {formatAmount(claim.amount)} XLM
+                          Claimed {formatAmount(claim.amount, 2, locale)} XLM
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {formatDate(claim.claimedAt || '')}
+                          {formatDate(claim.claimedAt || '', locale)}
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
@@ -182,32 +243,15 @@ export default function BeneficiaryPage() {
                 <div className="text-center py-8">
                   <History className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No Claim History</h3>
-                  <p className="text-muted-foreground">
-                    Your claimed aid will appear here
-                  </p>
+                  <p className="text-muted-foreground">Your claimed aid will appear here</p>
                 </div>
               </CardContent>
             </Card>
           )}
         </div>
-
-        {/* Verification Info */}
-        <Card className="mt-8 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-500 mt-0.5" />
-              <div>
-                <div className="font-medium text-blue-900 dark:text-blue-100 mb-1">
-                  Verified Beneficiary
-                </div>
-                <div className="text-sm text-blue-700 dark:text-blue-300">
-                  Your account has been verified and you are eligible to receive aid distributions.
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </main>
     </div>
   )
 }
+
+export default withRequireRole(BeneficiaryPortalPage, ['beneficiary', 'admin'])

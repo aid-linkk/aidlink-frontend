@@ -7,19 +7,21 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useWalletStore } from '@/store/wallet-store'
-import { formatAddress, formatAmount } from '@/lib/utils'
+import { formatAddress, formatAmount, formatDate } from '@/lib/utils'
+import { useLocale } from 'next-intl'
 import { DonationChart } from '@/components/features/analytics/donation-chart'
 import { ImpactChart } from '@/components/features/analytics/impact-chart'
 import { CampaignCardSkeleton, StatsCardSkeleton, TableRowSkeleton } from '@/components/features/loading/skeleton-card'
-import { ImpactBadges, getDefaultBadges } from '@/components/features/gamification/impact-badges'
+import { ImpactBadges } from '@/components/features/gamification/impact-badges'
 import { useRealTimeTransactions } from '@/hooks/use-real-time-transactions'
 import { ExportButton } from '@/components/features/export/export-button'
+import { useAnalytics } from '@/hooks/use-analytics'
+// ExportButton is now self-contained — no transactions prop needed
 import { 
   Heart, 
   TrendingUp, 
   Wallet, 
   ArrowUpRight, 
-  Clock, 
   CheckCircle2,
   AlertCircle,
   Plus,
@@ -29,16 +31,16 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 
 export default function DashboardPage() {
+  const locale = useLocale()
   const { address, balance, isConnected } = useWalletStore()
   const [isLoading, setIsLoading] = useState(true)
+  const { analytics, loading: analyticsLoading } = useAnalytics()
 
   useEffect(() => {
     // Simulate data loading
     const timer = setTimeout(() => setIsLoading(false), 1500)
     return () => clearTimeout(timer)
   }, [])
-
-  const badges = getDefaultBadges()
 
   const mockTransactions = [
     {
@@ -47,7 +49,7 @@ export default function DashboardPage() {
       to: 'Emergency Relief Campaign',
       amount: 500,
       status: 'completed' as const,
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
+      timestamp: new Date(Date.now() - 3600000),
     },
     {
       id: '2',
@@ -55,7 +57,7 @@ export default function DashboardPage() {
       to: 'Medical Supplies Campaign',
       amount: 250,
       status: 'completed' as const,
-      timestamp: new Date(Date.now() - 86400000).toISOString(),
+      timestamp: new Date(Date.now() - 86400000),
     },
     {
       id: '3',
@@ -63,11 +65,11 @@ export default function DashboardPage() {
       to: 'Beneficiary #1234',
       amount: 100,
       status: 'completed' as const,
-      timestamp: new Date(Date.now() - 172800000).toISOString(),
+      timestamp: new Date(Date.now() - 172800000),
     },
   ]
 
-  const transactions = useRealTimeTransactions(mockTransactions)
+  const { transactions } = useRealTimeTransactions(mockTransactions)
 
   if (!isConnected) {
     return (
@@ -111,55 +113,38 @@ export default function DashboardPage() {
     },
   ]
 
-  const mockTransactions = [
-    {
-      id: '1',
-      type: 'donation',
-      to: 'Emergency Relief Campaign',
-      amount: 500,
-      status: 'completed',
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-    },
-    {
-      id: '2',
-      type: 'donation',
-      to: 'Medical Supplies Campaign',
-      amount: 250,
-      status: 'completed',
-      timestamp: new Date(Date.now() - 86400000).toISOString(),
-    },
-    {
-      id: '3',
-      type: 'distribution',
-      to: 'Beneficiary #1234',
-      amount: 100,
-      status: 'completed',
-      timestamp: new Date(Date.now() - 172800000).toISOString(),
-    },
-  ]
+  const donationData =
+    analytics?.dailyDonations.map((day) => ({
+      month: day.date,
+      amount: day.amount,
+    })) ?? []
 
-  const donationData = [
-    { month: 'Jan', amount: 200 },
-    { month: 'Feb', amount: 350 },
-    { month: 'Mar', amount: 450 },
-    { month: 'Apr', amount: 300 },
-    { month: 'May', amount: 500 },
-    { month: 'Jun', amount: 750 },
-  ]
-
-  const impactData = [
-    { category: 'Emergency', amount: 500 },
-    { category: 'Healthcare', amount: 250 },
-    { category: 'Education', amount: 150 },
-    { category: 'Food', amount: 300 },
-    { category: 'Shelter', amount: 200 },
-  ]
+  const impactData =
+    analytics?.donorDistribution.map((distribution) => ({
+      category: distribution.range,
+      amount: distribution.count,
+    })) ?? []
 
   const stats = [
-    { label: 'Total Donated', value: '$750', icon: Heart, change: '+12%' },
-    { label: 'Wallet Balance', value: `${formatAmount(balance)} XLM`, icon: Wallet, change: '+5%' },
-    { label: 'Campaigns Supported', value: '3', icon: TrendingUp, change: '+1' },
-    { label: 'Impact Score', value: '850', icon: CheckCircle2, change: '+25' },
+    {
+      label: 'Total Donated',
+      value: `${formatAmount(analytics?.totalAmount ?? 0, 2, locale)} XLM`,
+      icon: Heart,
+      change: '+12%',
+    },
+    { label: 'Wallet Balance', value: `${formatAmount(balance, 2, locale)} XLM`, icon: Wallet, change: '+5%' },
+    {
+      label: 'Campaigns Supported',
+      value: analytics && analytics.totalDonations > 0 ? '1' : '0',
+      icon: TrendingUp,
+      change: '+1',
+    },
+    {
+      label: 'Impact Score',
+      value: String(analytics?.totalDonations ?? 0),
+      icon: CheckCircle2,
+      change: '+25',
+    },
   ]
 
   return (
@@ -176,7 +161,7 @@ export default function DashboardPage() {
 
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          {isLoading ? (
+          {isLoading || analyticsLoading ? (
             <>
               <StatsCardSkeleton />
               <StatsCardSkeleton />
@@ -184,7 +169,7 @@ export default function DashboardPage() {
               <StatsCardSkeleton />
             </>
           ) : (
-            stats.map((stat, index) => (
+            stats.map((stat) => (
               <Card key={stat.label}>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
@@ -214,7 +199,7 @@ export default function DashboardPage() {
               <h2 className="text-xl font-semibold">Active Campaigns</h2>
               <Link href="/campaigns">
                 <Button variant="outline" size="sm">
-                  View All <ArrowUpRight className="ml-2 h-4 w-4" />
+                  View All <ArrowUpRight className="ms-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>
@@ -235,7 +220,7 @@ export default function DashboardPage() {
                         <Badge variant="secondary">{campaign.category}</Badge>
                       </div>
                       <CardDescription>
-                        {formatAmount(campaign.raisedAmount)} of {formatAmount(campaign.targetAmount)} XLM raised
+                        {formatAmount(campaign.raisedAmount, 2, locale)} of {formatAmount(campaign.targetAmount, 2, locale)} XLM raised
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -254,7 +239,7 @@ export default function DashboardPage() {
                           </span>
                           <Link href={`/campaigns/${campaign.id}`}>
                             <Button size="sm" variant="outline">
-                              <Eye className="mr-2 h-4 w-4" />
+                              <Eye className="me-2 h-4 w-4" />
                               Details
                             </Button>
                           </Link>
@@ -277,7 +262,7 @@ export default function DashboardPage() {
                   </div>
                   <Link href="/campaigns/create">
                     <Button>
-                      <Plus className="mr-2 h-4 w-4" />
+                      <Plus className="me-2 h-4 w-4" />
                       Create Campaign
                     </Button>
                   </Link>
@@ -290,9 +275,9 @@ export default function DashboardPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold">Recent Transactions</h2>
               <div className="flex gap-2">
-                <ExportButton transactions={transactions} filename="aidlink-transactions" />
+                <ExportButton filename="aidlink-transactions" />
                 <Button variant="outline" size="sm">
-                  View All <ArrowUpRight className="ml-2 h-4 w-4" />
+                  View All <ArrowUpRight className="ms-2 h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -316,14 +301,14 @@ export default function DashboardPage() {
                       <TableRow key={tx.id} className="animate-in fade-in slide-in-from-top-2 duration-300">
                         <TableCell className="capitalize">{tx.type}</TableCell>
                         <TableCell>{tx.to}</TableCell>
-                        <TableCell>{formatAmount(tx.amount)} XLM</TableCell>
+                        <TableCell>{formatAmount(tx.amount, 2, locale)} XLM</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-green-600 border-green-600">
                             {tx.status}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          {new Date(tx.timestamp).toLocaleDateString()}
+                          {formatDate(tx.timestamp, locale)}
                         </TableCell>
                       </TableRow>
                     ))
@@ -342,7 +327,7 @@ export default function DashboardPage() {
           </TabsContent>
 
           <TabsContent value="badges" className="space-y-4">
-            <ImpactBadges badges={badges} />
+            <ImpactBadges />
           </TabsContent>
         </Tabs>
       </main>

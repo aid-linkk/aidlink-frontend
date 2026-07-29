@@ -1,3 +1,4 @@
+import { TableCell, TableRow } from '@/components/ui/table'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -45,12 +46,16 @@ export function StatsCardSkeleton() {
   )
 }
 
-export function TableRowSkeleton() {
+export function TableRowSkeleton({ count = 3 }: { count?: number }) {
   return (
     <>
-      <Skeleton className="h-12 w-full" />
-      <Skeleton className="h-12 w-full" />
-      <Skeleton className="h-12 w-full" />
+      {Array.from({ length: count }).map((_, index) => (
+        <TableRow key={index}>
+          <TableCell colSpan={3}>
+            <Skeleton className="h-12 w-full" />
+          </TableCell>
+        </TableRow>
+      ))}
     </>
   )
 }
