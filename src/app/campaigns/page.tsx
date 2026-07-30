@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Progress } from '@/components/ui/progress'
 import { CampaignFilters, CampaignFilters as CampaignFiltersType } from '@/components/features/campaigns/campaign-filters'
 import { ShareButton } from '@/components/features/social/share-button'
 import { CampaignComparison } from '@/components/features/campaigns/campaign-comparison'
@@ -14,6 +15,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { formatAmount, formatDate, calculateCampaignProgress } from '@/lib/utils'
 import { useLocale } from 'next-intl'
+import { useCampaigns } from '@/hooks/use-campaigns'
 
 export default function CampaignsPage() {
   const locale = useLocale()
@@ -142,72 +144,89 @@ export default function CampaignsPage() {
 
         {/* Campaigns Grid */}
         {!isLoading && !isError && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredCampaigns.map((campaign) => (
-            <Card key={campaign.id} className="flex flex-col hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between mb-2">
-                  <Badge variant="secondary" className="capitalize">
-                    {campaign.category}
-                  </Badge>
-                  <Badge className="bg-green-600">Active</Badge>
-                </div>
-                <CardTitle className="text-xl mb-2">{campaign.title}</CardTitle>
-                <CardDescription className="line-clamp-2">
-                  {campaign.description}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
-                <div className="space-y-4 mb-4">
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className="font-medium">
-                        {formatAmount(campaign.raisedAmount, 2, locale)} / {formatAmount(campaign.targetAmount, 2, locale)} XLM
-                      </span>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" role="list" aria-label="Available campaigns">
+          {filteredCampaigns.map((campaign) => {
+            const progress = calculateCampaignProgress(campaign.raisedAmount, campaign.targetAmount)
+            const titleId = `campaign-title-${campaign.id}`
+            const descriptionId = `campaign-description-${campaign.id}`
+
+            return (
+              <Card
+                key={campaign.id}
+                className="flex flex-col hover:shadow-lg transition-shadow"
+                role="listitem"
+                aria-labelledby={titleId}
+                aria-describedby={descriptionId}
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between mb-2">
+                    <Badge variant="secondary" className="capitalize">
+                      {campaign.category}
+                    </Badge>
+                    <Badge className="bg-green-600">Active</Badge>
+                  </div>
+                  <CardTitle id={titleId} className="text-xl mb-2">
+                    {campaign.title}
+                  </CardTitle>
+                  <CardDescription id={descriptionId} className="line-clamp-2">
+                    {campaign.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1 flex flex-col">
+                  <div className="space-y-4 mb-4">
+                    <div>
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-muted-foreground">Progress</span>
+                        <span className="font-medium">
+                          {formatAmount(campaign.raisedAmount, 2, locale)} / {formatAmount(campaign.targetAmount, 2, locale)} XLM
+                        </span>
+                      </div>
+                      <Progress
+                        value={progress}
+                        className="h-2"
+                        aria-label={`Campaign progress for ${campaign.title}: ${progress.toFixed(1)}% funded`}
+                      />
+                      <p className="mt-2 text-xs text-muted-foreground">{progress.toFixed(1)}% funded</p>
+                      <p className="sr-only">Campaign progress: {progress.toFixed(1)}% funded</p>
                     </div>
-                    <div className="w-full bg-secondary h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-primary h-full transition-all"
-                        style={{
-                          width: `${calculateCampaignProgress(campaign.raisedAmount, campaign.targetAmount)}%`,
-                        }}
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Heart className="h-4 w-4" aria-hidden="true" />
+                        <span>{campaign.ngoName}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="h-4 w-4" aria-hidden="true" />
+                        <span>Ends {formatDate(campaign.endDate, locale)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-auto space-y-2" role="group" aria-label={`Actions for ${campaign.title}`}>
+                    <Link
+                      href={`/campaigns/${campaign.id}`}
+                      className="block"
+                      aria-label={`View details for ${campaign.title}`}
+                    >
+                      <Button className="w-full">
+                        View Details
+                      </Button>
+                    </Link>
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="flex-1">
+                        Donate Now
+                      </Button>
+                      <ShareButton
+                        title={campaign.title}
+                        description={campaign.description}
+                        url={`${typeof window !== 'undefined' ? window.location.origin : ''}/campaigns/${campaign.id}`}
                       />
                     </div>
                   </div>
-                  
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Heart className="h-4 w-4" />
-                      <span>{campaign.ngoName}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      <span>Ends {formatDate(campaign.endDate, locale)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-auto space-y-2">
-                  <Link href={`/campaigns/${campaign.id}`} className="block">
-                    <Button className="w-full">
-                      View Details
-                    </Button>
-                  </Link>
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1">
-                      Donate Now
-                    </Button>
-                    <ShareButton
-                      title={campaign.title}
-                      description={campaign.description}
-                      url={`${typeof window !== 'undefined' ? window.location.origin : ''}/campaigns/${campaign.id}`}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
         )}
 
