@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -66,41 +65,46 @@ export function CampaignComparison({ campaigns }: CampaignComparisonProps) {
 
           <div className="space-y-6">
             {/* Campaign Selection */}
-            <div className="space-y-3">
-              <h3 className="font-semibold">Select Campaigns to Compare</h3>
-              <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                {campaigns.map((campaign) => (
-                  <Card
-                    key={campaign.id}
-                    className={`cursor-pointer transition-all ${
-                      selectedCampaigns.find((c) => c.id === campaign.id)
-                        ? 'border-primary bg-primary/5'
-                        : 'hover:border-primary/50'
-                    }`}
-                    onClick={() => toggleCampaign(campaign)}
-                  >
-                    <CardContent className="pt-4">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{campaign.title}</p>
-                          <p className="text-xs text-muted-foreground">{campaign.ngoName}</p>
+            <div className="space-y-3" role="region" aria-labelledby="campaign-selection-heading">
+              <h3 id="campaign-selection-heading" className="font-semibold">Select Campaigns to Compare</h3>
+              <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3" role="list" aria-label="Selectable campaigns">
+                {campaigns.map((campaign) => {
+                  const isSelected = selectedCampaigns.some((c) => c.id === campaign.id)
+
+                  return (
+                    <div key={campaign.id} role="listitem">
+                      <button
+                        type="button"
+                        className={`w-full rounded-lg border bg-card p-4 text-left transition-all ${
+                          isSelected
+                            ? 'border-primary bg-primary/5'
+                            : 'hover:border-primary/50'
+                        }`}
+                        onClick={() => toggleCampaign(campaign)}
+                        aria-pressed={isSelected}
+                        aria-label={`Select campaign ${campaign.title}`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{campaign.title}</p>
+                            <p className="text-xs text-muted-foreground">{campaign.ngoName}</p>
+                          </div>
+                          {isSelected && <Check className="h-4 w-4 text-primary flex-shrink-0" aria-hidden="true" />}
                         </div>
-                        {selectedCampaigns.find((c) => c.id === campaign.id) && (
-                          <Check className="h-4 w-4 text-primary flex-shrink-0" />
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
             {/* Comparison Table */}
             {selectedCampaigns.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="font-semibold">Comparison</h3>
+              <div className="space-y-3" role="region" aria-labelledby="comparison-heading">
+                <h3 id="comparison-heading" className="font-semibold">Comparison</h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full" aria-label="Campaign comparison metrics">
+                    <caption className="sr-only">Comparison table for selected campaigns</caption>
                     <thead>
                       <tr className="border-b">
                         <th className="text-left p-3 font-medium">Metric</th>
@@ -149,7 +153,11 @@ export function CampaignComparison({ campaigns }: CampaignComparisonProps) {
                         {selectedCampaigns.map((campaign) => (
                           <td key={campaign.id} className="p-3">
                             <div className="space-y-2">
-                              <Progress value={getProgress(campaign)} className="h-2" />
+                              <Progress
+                                value={getProgress(campaign)}
+                                className="h-2"
+                                aria-label={`Campaign progress for ${campaign.title}: ${getProgress(campaign).toFixed(1)}% funded`}
+                              />
                               <p className="text-xs text-muted-foreground">
                                 {getProgress(campaign).toFixed(1)}%
                               </p>
