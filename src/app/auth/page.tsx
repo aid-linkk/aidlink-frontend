@@ -7,19 +7,20 @@ import { useState } from 'react'
 import { useWalletStore } from '@/store/wallet-store'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import type { WalletId } from '@/lib/wallet/wallet-service'
 
 export default function AuthPage() {
   const [isConnecting, setIsConnecting] = useState(false)
-  const { setWallet, isConnected } = useWalletStore()
+  const { setWallet, isConnected, network } = useWalletStore()
   const router = useRouter()
 
-  const handleConnectWallet = async () => {
+  const handleConnectWallet = async (walletId: WalletId) => {
     setIsConnecting(true)
     try {
       const { walletService } = await import('@/lib/wallet/wallet-service')
       
-      // Try to connect with Freighter
-      const walletInfo = await walletService.connectFreighter()
+      // Connect with the specified wallet
+      const walletInfo = await walletService.connect(walletId, network)
       
       // Get balance from Soroban SDK
       const { sorobanSDK } = await import('@/lib/soroban/sdk')
@@ -29,7 +30,7 @@ export default function AuthPage() {
         isConnected: true,
         address: walletInfo.address,
         publicKey: walletInfo.publicKey,
-        network: 'testnet',
+        network: walletInfo.network as 'mainnet' | 'testnet' | 'futurenet' | 'standalone',
         balance,
       })
       
@@ -41,7 +42,7 @@ export default function AuthPage() {
     } catch (error) {
       console.error('Wallet connection error:', error)
       toast.error('Failed to connect wallet', {
-        description: 'Please make sure Freighter is installed and try again',
+        description: error instanceof Error ? error.message : `Please make sure ${walletId} is installed and try again`,
       })
     } finally {
       setIsConnecting(false)
@@ -73,7 +74,7 @@ export default function AuthPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Button
-              onClick={handleConnectWallet}
+              onClick={() => handleConnectWallet('freighter')}
               disabled={isConnecting}
               className="w-full h-12 text-lg"
               size="lg"
@@ -82,7 +83,7 @@ export default function AuthPage() {
                 <>Connecting...</>
               ) : (
                 <>
-                  <Wallet className="mr-2 h-5 w-5" />
+                  <Wallet className="me-2 h-5 w-5" />
                   Connect with Stellar Wallet
                 </>
               )}
@@ -100,16 +101,31 @@ export default function AuthPage() {
             </div>
 
             <div className="grid gap-2">
-              <Button variant="outline" className="w-full" disabled={isConnecting}>
-                <Shield className="mr-2 h-4 w-4" />
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                disabled={isConnecting}
+                onClick={() => handleConnectWallet('freighter')}
+              >
+                <Shield className="me-2 h-4 w-4" />
                 Freighter
               </Button>
-              <Button variant="outline" className="w-full" disabled={isConnecting}>
-                <Shield className="mr-2 h-4 w-4" />
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                disabled={isConnecting}
+                onClick={() => handleConnectWallet('rabet')}
+              >
+                <Shield className="me-2 h-4 w-4" />
                 Rabet
               </Button>
-              <Button variant="outline" className="w-full" disabled={isConnecting}>
-                <Shield className="mr-2 h-4 w-4" />
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                disabled={isConnecting}
+                onClick={() => handleConnectWallet('xbull')}
+              >
+                <Shield className="me-2 h-4 w-4" />
                 XBull
               </Button>
             </div>
