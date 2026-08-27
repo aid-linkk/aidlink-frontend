@@ -1,6 +1,5 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { PersistStorage } from 'zustand/middleware'
 import type { WalletState } from '@/types'
 import { getSorobanSDK } from '@/lib/soroban/sdk'
 
@@ -17,11 +16,6 @@ interface WalletStore extends WalletState {
   disconnect: () => void
   switchNetwork: (network: 'mainnet' | 'testnet' | 'futurenet' | 'standalone') => void
 }
-
-type WalletPersistedState = Pick<
-  WalletStore,
-  'isConnected' | 'address' | 'network' | 'connectedAt'
->
 
 export const useWalletStore = create<WalletStore>()(
   persist(
